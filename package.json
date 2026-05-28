@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "codegraph:status": "codegraph status .",
+    "codegraph:sync": "codegraph sync .",
+    "codegraph:index": "codegraph index ."
+  },
+  "devDependencies": {
+    "@colbymchenry/codegraph": "^0.9.6"
+  }
+}
