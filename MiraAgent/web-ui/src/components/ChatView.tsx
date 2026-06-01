@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import type { CharacterCard, Message, StreamEvent, ToolInfo, TraceEvent } from '../types'
-import { getCharacters, getMessages, getSessionTrace, getTools, interrupt, streamChat } from '../api'
+import type { CharacterCard, DocumentInfo, Message, StreamEvent, ToolInfo, TraceEvent } from '../types'
+import { getCharacters, getMessages, getSessionTrace, getTools, interrupt, streamChat, uploadDocument } from '../api'
 import { registerSession } from '../sessionStore'
 import MessageBubble from './MessageBubble'
 import ToolChip from './ToolChip'
@@ -25,10 +25,13 @@ export default function ChatView({ sessionId, userId }: Props) {
   const [toolsOpen, setToolsOpen] = useState(false)
   const [characters, setCharacters] = useState<CharacterCard[]>([])
   const [characterId, setCharacterId] = useState<string>('mira')
+  const [attachments, setAttachments] = useState<DocumentInfo[]>([])
+  const [uploading, setUploading] = useState(false)
   const runIdRef = useRef<string | null>(null)
   const abortRef = useRef<null | (() => void)>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const accRef = useRef('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // 加载工具与角色（一次）。默认启用 LOW/MEDIUM 工具，HIGH/CRITICAL 默认关闭（与权限门控一致）。
   useEffect(() => {
@@ -73,6 +76,27 @@ export default function ChatView({ sessionId, userId }: Props) {
     })
   }
 
+  async function onPickFiles(files: FileList | null) {
+    if (!files || files.length === 0) return
+    setUploading(true)
+    setError(null)
+    try {
+      for (const f of Array.from(files)) {
+        const info = await uploadDocument(f)
+        setAttachments((prev) => [...prev.filter((p) => p.name !== info.name), info])
+      }
+    } catch (e) {
+      setError(`上传失败：${String(e)}`)
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  function removeAttachment(name: string) {
+    setAttachments((prev) => prev.filter((p) => p.name !== name))
+  }
+
   function finalize(text: string) {
     if (text.trim()) {
       setMessages((m) => [
@@ -86,9 +110,24 @@ export default function ChatView({ sessionId, userId }: Props) {
   }
 
   function send() {
-    const content = input.trim()
-    if (!content || streaming) return
+    const typed = input.trim()
+    if ((!typed && attachments.length === 0) || streaming) return
     setError(null)
+
+    // 有附件时：在消息前注明已上传的文档，并确保文档工具放行（即便用户没在工具栏勾选）。
+    const attachNote =
+      attachments.length > 0
+        ? `[已上传文档：${attachments.map((a) => a.name).join('、')}]\n`
+        : ''
+    const content = attachNote + (typed || '请处理我上传的文档。')
+
+    const sendTools = new Set(enabled)
+    if (attachments.length > 0) {
+      sendTools.add('document_read')
+      sendTools.add('document_list')
+      sendTools.add('document_write')
+    }
+
     registerSession(sessionId, messages.length === 0 ? content : '')
 
     const userMsg: Message = {
@@ -99,12 +138,13 @@ export default function ChatView({ sessionId, userId }: Props) {
     }
     setMessages((m) => [...m, userMsg])
     setInput('')
+    setAttachments([])
     setAssistant('')
     setStreaming(true)
     accRef.current = ''
 
     abortRef.current = streamChat(
-      { userId, sessionId, characterId, content, enabledTools: Array.from(enabled) },
+      { userId, sessionId, characterId, content, enabledTools: Array.from(sendTools) },
       (ev: StreamEvent) => {
         if (ev.type === 'start') {
           runIdRef.current = ev.runId
@@ -243,7 +283,43 @@ export default function ChatView({ sessionId, userId }: Props) {
 
       {error && <div className="chat-error">⚠ {error}</div>}
 
+      {attachments.length > 0 && (
+        <div className="attach-bar">
+          {attachments.map((a) => (
+            <span key={a.name} className="attach-chip" title={a.name}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" width="13" height="13">
+                <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" strokeLinejoin="round" />
+                <path d="M14 3v5h5" strokeLinejoin="round" />
+              </svg>
+              <span className="attach-name">{a.name}</span>
+              <button className="attach-x" onClick={() => removeAttachment(a.name)} title="移除">×</button>
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className="composer">
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          hidden
+          onChange={(e) => void onPickFiles(e.target.files)}
+        />
+        <button
+          className="attach-btn"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={streaming || uploading}
+          title="上传文档（PDF / Word / Excel / PPT / 文本…）"
+        >
+          {uploading ? (
+            <span className="attach-spin" />
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="19" height="19">
+              <path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.2-9.2a3.33 3.33 0 1 1 4.71 4.71l-9.2 9.2a1.67 1.67 0 0 1-2.36-2.36l8.49-8.48" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </button>
         <textarea
           className="composer-input"
           placeholder="说点什么…（Enter 发送，Shift+Enter 换行）"
@@ -255,7 +331,7 @@ export default function ChatView({ sessionId, userId }: Props) {
         {streaming ? (
           <button className="btn btn-danger send-btn" onClick={stop}>停止</button>
         ) : (
-          <button className="btn btn-accent send-btn" onClick={send} disabled={!input.trim()}>
+          <button className="btn btn-accent send-btn" onClick={send} disabled={!input.trim() && attachments.length === 0}>
             发送
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
               <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
