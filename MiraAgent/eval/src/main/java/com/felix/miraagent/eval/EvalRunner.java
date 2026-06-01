@@ -57,6 +57,9 @@ public class EvalRunner {
         int e2eOk = 0;
         int toolLoopTotal = 0, toolLoopOk = 0;
         int assertTotal = 0, assertHit = 0;
+        int toolExecTotal = 0, toolExecOk = 0;   // 所有工具执行
+        int mcpExecTotal = 0, mcpExecOk = 0;      // MCP 工具执行(名为 mcp__*)
+        int reviewTotal = 0, reviewHit = 0;       // 自我改善:后台复盘触发判断是否符合预期
         List<Long> ttfts = new ArrayList<>();
         List<Long> latencies = new ArrayList<>();
         List<Integer> tokensPerTurn = new ArrayList<>();
@@ -104,6 +107,16 @@ public class EvalRunner {
                 toolLoopTotal++;
                 if (o.ok()) toolLoopOk++;
             }
+            // Layer1: 工具执行成功率(整体 + MCP),不抛异常且 status=SUCCESS
+            for (var te : o.toolStatuses().entrySet()) {
+                boolean okStatus = "SUCCESS".equals(te.getValue());
+                toolExecTotal++;
+                if (okStatus) toolExecOk++;
+                if (te.getKey().startsWith("mcp__")) {
+                    mcpExecTotal++;
+                    if (okStatus) mcpExecOk++;
+                }
+            }
             // 轻量事实断言
             if (c.assertContains() != null && !c.assertContains().isEmpty()) {
                 assertTotal++;
@@ -123,6 +136,20 @@ public class EvalRunner {
                 putIf(jn, "tool_usage", js.toolUsage(), jToolUse);
                 putIf(jn, "overall", js.overall(), jOverall);
             }
+            // 自我改善(后台复盘是异步的,经公开 trace API 黑盒观测):触发判断是否符合预期
+            if (c.expectReview() != null && o.ok()) {
+                boolean expect = c.expectReview();
+                var review = client.pollReview(o.sessionId(), expect ? 30_000 : 8_000);
+                boolean correct = review.triggered() == expect;
+                reviewTotal++;
+                if (correct) reviewHit++;
+                ObjectNode rn = cr.putObject("self_improvement");
+                rn.put("expectReview", expect);
+                rn.put("triggered", review.triggered());
+                rn.put("triggeredBy", review.triggeredBy());
+                rn.put("memoryWrites", review.memoryWrites());
+                rn.put("skillWrites", review.skillWrites());
+            }
             caseReports.add(cr);
             System.out.printf("  %-16s %-12s %s%s%n", c.id(), c.category(),
                     o.ok() ? "OK" : "FAIL", o.error() != null ? " (" + o.error() + ")" : "");
@@ -134,6 +161,8 @@ public class EvalRunner {
         l1.put("tool_selection_accuracy", ratio(toolSelHit, toolSelTotal));
         l1.put("parameter_accuracy", ratio(paramHit, paramTotal));
         l1.put("no_tool_rate", ratio(noToolHit, noToolTotal));
+        l1.put("tool_execution_success_rate", ratio(toolExecOk, toolExecTotal));
+        l1.put("mcp_execution_success_rate", ratio(mcpExecOk, mcpExecTotal));
         // Layer 2
         ObjectNode l2 = summary.putObject("layer2_chain");
         l2.put("e2e_success_rate", ratio(e2eOk, cases.size()));
@@ -151,6 +180,10 @@ public class EvalRunner {
             l3.put("tool_usage_avg", avgInt(jToolUse));
             l3.put("overall_avg", avgInt(jOverall));
             l3.put("judged_cases", jOverall.size());
+        }
+        // 自我改善机制(后台复盘触发准确率)
+        if (reviewTotal > 0) {
+            summary.putObject("self_improvement").put("review_trigger_accuracy", ratio(reviewHit, reviewTotal));
         }
         summary.put("fact_assertion_pass_rate", ratio(assertHit, assertTotal));
         summary.put("total_cases", cases.size());

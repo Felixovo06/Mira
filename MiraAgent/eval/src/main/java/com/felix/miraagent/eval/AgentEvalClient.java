@@ -35,9 +35,10 @@ public class AgentEvalClient {
     }
 
     public RunOutcome run(EvalCase c) {
+        String sessionId = "eval-" + UUID.randomUUID();
         ObjectNode body = mapper.createObjectNode();
         body.put("userId", "eval-" + (c.id() != null ? c.id() : "x"));
-        body.put("sessionId", "eval-" + UUID.randomUUID());
+        body.put("sessionId", sessionId);
         body.put("content", c.userMessage());
         body.put("stream", true);
         if (c.characterId() != null) {
@@ -67,7 +68,7 @@ public class AgentEvalClient {
                     .build();
             HttpResponse<Stream<String>> resp = http.send(req, HttpResponse.BodyHandlers.ofLines());
             if (resp.statusCode() / 100 != 2) {
-                return fail("HTTP " + resp.statusCode(), t0);
+                return fail("HTTP " + resp.statusCode(), sessionId, t0);
             }
             String[] event = {""};
             try (Stream<String> lines = resp.body()) {
@@ -84,13 +85,53 @@ public class AgentEvalClient {
                 });
             }
         } catch (Exception e) {
-            return fail(e.getMessage(), t0);
+            return fail(e.getMessage(), sessionId, t0);
         }
 
         long totalMs = (System.nanoTime() - t0) / 1_000_000;
         boolean ok = done[0] && error[0] == null;
-        return new RunOutcome(ok, error[0], ttft[0] < 0 ? totalMs : ttft[0], totalMs,
+        return new RunOutcome(ok, error[0], sessionId, ttft[0] < 0 ? totalMs : ttft[0], totalMs,
                 toolCalls, toolStatuses, usage[0], usage[1], finalContent[0]);
+    }
+
+    /**
+     * 轮询会话 trace,观测异步「自我改善」(后台复盘)的结果——经公开 trace API,黑盒。
+     * 后台复盘在主回复后异步触发,故需等待至多 timeoutMs。
+     */
+    public ReviewObservation pollReview(String sessionId, long timeoutMs) {
+        long deadline = System.nanoTime() + timeoutMs * 1_000_000;
+        while (System.nanoTime() < deadline) {
+            try {
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/api/traces/sessions/" + sessionId))
+                        .timeout(Duration.ofSeconds(10)).GET().build();
+                HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+                if (resp.statusCode() / 100 == 2) {
+                    for (com.fasterxml.jackson.databind.JsonNode e : mapper.readTree(resp.body())) {
+                        if ("BACKGROUND_REVIEW_FINISHED".equals(e.path("eventType").asText())) {
+                            com.fasterxml.jackson.databind.JsonNode p = e.path("payload");
+                            return new ReviewObservation(true,
+                                    p.path("review_triggered_by").asText(""),
+                                    p.path("skillWrites").asInt(0),
+                                    p.path("memoryWrites").asInt(0));
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+                // 重试到超时
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        return new ReviewObservation(false, "", 0, 0);
+    }
+
+    /** 后台复盘观测:是否触发、触发原因、写入的技能/记忆条数。 */
+    public record ReviewObservation(boolean triggered, String triggeredBy, int skillWrites, int memoryWrites) {
     }
 
     private void handle(String event, String data, long t0, long[] ttft,
@@ -132,9 +173,9 @@ public class AgentEvalClient {
         }
     }
 
-    private RunOutcome fail(String err, long t0) {
+    private RunOutcome fail(String err, String sessionId, long t0) {
         long totalMs = (System.nanoTime() - t0) / 1_000_000;
-        return new RunOutcome(false, err, totalMs, totalMs,
+        return new RunOutcome(false, err, sessionId, totalMs, totalMs,
                 List.of(), Map.of(), 0, 0, "");
     }
 }

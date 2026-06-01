@@ -15,6 +15,7 @@ import java.util.Map;
  * @param expectedParams 期望的工具参数子集（值做子串匹配；可空）
  * @param expectNoTool  是否期望"不调用任何工具"（no-tool 准确率）
  * @param assertContains 最终回复应包含的关键字（轻量事实断言；可空）
+ * @param expectReview  是否期望触发"自我改善"后台复盘（null=不评该维度）
  */
 public record EvalCase(
         String id,
@@ -25,7 +26,8 @@ public record EvalCase(
         String expectedTool,
         Map<String, String> expectedParams,
         Boolean expectNoTool,
-        List<String> assertContains) {
+        List<String> assertContains,
+        Boolean expectReview) {
 
     public boolean expectsNoTool() {
         return Boolean.TRUE.equals(expectNoTool);

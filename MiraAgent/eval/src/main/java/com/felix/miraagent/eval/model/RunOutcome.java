@@ -19,6 +19,7 @@ import java.util.Map;
 public record RunOutcome(
         boolean ok,
         String error,
+        String sessionId,
         long ttftMs,
         long totalMs,
         List<Map<String, String>> toolCalls,

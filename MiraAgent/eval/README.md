@@ -5,15 +5,16 @@
 
 ## 四层模型
 
-| 层 | 内容 | 客观性/速度 | 现状 |
-|----|------|------------|------|
-| L1 单元级 | 工具选择准确率 / 参数准确率 / no-tool 率 / 记忆 P·R / MCP 成功率 | 高 | 工具三项✅，记忆 P/R 与 MCP 计划中 |
-| L2 链路级 | E2E 成功率 / 工具链完成率 / TTFT / 延迟 / token·turn | 高 | ✅ |
-| L3 质量级 | LLM-as-Judge：相关性/角色一致/记忆使用（3× 取中位数 + Kappa 校验） | 中 | 计划中 |
-| L4 回归级 | golden set + baseline diff，精确到"哪条 case 变了多少" | — | 计划中 |
+| 层 | 内容 | 现状 |
+|----|------|------|
+| L1 单元级 | 工具选择/参数/no-tool 准确率、工具&MCP 执行成功率 | ✅（黑盒 eval 模块）|
+| L1 记忆 | 检索 Precision / Recall / Top-1 | ✅（`MemoryRetrievalEvalTest`，组件级，按需）|
+| L2 链路级 | E2E 成功率 / 工具链完成率 / TTFT / 延迟 / token·turn | ✅ |
+| L3 质量级 | LLM-as-Judge：相关性/角色一致/工具使用（3× 取中位数；可加 Kappa）| ✅（可选）|
+| L4 回归级 | baseline diff，精确到"哪条指标变了多少"（容差）| ✅ |
+| 自我改善 | 后台复盘触发准确率（黑盒经 trace 观测异步复盘）| ✅ |
 
-当前已落地 **L1（工具三项）+ L2 + L3（Judge）+ L4（baseline diff）**，对真实 Agent 出报告。
-（L1 记忆 P·R / MCP 成功率仍为后续。）
+四层全落地。记忆 P·R 因依赖真实 embedding+PG，作为组件级 gated 测试单独跑（见下）。
 
 ## 跑法
 
@@ -46,6 +47,21 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21 ./mvnw -q -pl eval -am compile \
 报告里多出 `diff`：超容差的指标分到 `regressions`/`improvements`（延迟/token 越低越好，其余越高越好）。
 
 > CI 建议：L1 工具准确率/L3/L4 因依赖真实模型→**按需/每日**跑；`EvalLogicTest`（diff/median 纯逻辑）可进每次 push。
+
+### 记忆检索 P·R（组件级，按需）
+
+依赖真实 embedding(DashScope) + 云 PG，故为 gated 测试，不在黑盒 eval 模块内（避免耦合）：
+
+```bash
+JAVA_HOME=... ./mvnw -pl adapter-spring test -Dmira.it.postgres=true \
+  -Dtest=MemoryRetrievalEvalTest -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+播种带标注的记忆池→跑混合检索→算 P/R/Top-1（目标 P≥0.80 / R≥0.75 / Top-1≥0.85）。
+
+> 实测发现：在"短句 + 共同前缀（都以'用户…'开头）"的难集上 Top-1 仅 0.33——
+> 根因一是短文本 embedding 区分度低，二是 `rerank()` 阶段只按 category/recency/character 排序、
+> **丢弃了查询相关性信号**，无法挽救弱排序。这是评测暴露的真实可优化点（非崩溃，是质量短板）。
 
 ## 指标定义（关键设计取舍）
 

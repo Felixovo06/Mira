@@ -4,7 +4,14 @@
     "category": "basic_chat",
     "userMessage": "你好呀，今天心情不错～",
     "enabledTools": ["calculator", "web_fetch"],
-    "expectNoTool": true
+    "expectNoTool": true,
+    "expectReview": false
+  },
+  {
+    "id": "selfimprove_remember",
+    "category": "self_improve",
+    "userMessage": "请记住：我以后睡前都喜欢听轻音乐来放松。",
+    "expectReview": true
   },
   {
     "id": "basic_selfintro",
@@ -43,6 +50,14 @@
     "userMessage": "用联网搜索查一下 OpenAI 这家公司的总部在哪个城市",
     "enabledTools": ["mcp__exa__web_search_exa", "mcp__exa__web_fetch_exa"],
     "expectedTool": "mcp__exa__web_search_exa"
+  },
+  {
+    "id": "tool_mcp_add",
+    "category": "tool_call",
+    "userMessage": "用 add 工具帮我算 7 加 35 等于多少",
+    "enabledTools": ["mcp__demo__add"],
+    "expectedTool": "mcp__demo__add",
+    "assertContains": ["42"]
   },
   {
     "id": "tool_web_fetch",
