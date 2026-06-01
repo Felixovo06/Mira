@@ -13,8 +13,8 @@ import org.springframework.context.annotation.Configuration;
 public class StyleConstraintConfig {
 
     @Bean
-    public StyleConstraintProvider styleConstraintProvider(StyleConstraintProperties props,
-                                                           ObjectMapper objectMapper) {
+    public StyleConstraintStore styleConstraintStore(StyleConstraintProperties props,
+                                                     ObjectMapper objectMapper) {
         return new FileStyleConstraintProvider(props, objectMapper);
     }
 }

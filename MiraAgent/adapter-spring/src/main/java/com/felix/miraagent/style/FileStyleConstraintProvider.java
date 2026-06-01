@@ -14,10 +14,10 @@ import java.nio.file.Paths;
 import java.util.Optional;
 
 /**
- * 文件风格约束来源：外部 {@code file} 优先，回退到内置 style/default.json。
- * 加载一次并缓存，配置变更需重启（与角色卡的内置加载行为一致）。
+ * 文件风格约束存储：外部 {@code file} 优先，回退到内置 style/default.json。
+ * 加载到内存缓存；{@link #save} 写回外部文件并刷新缓存，立即生效无需重启。
  */
-public class FileStyleConstraintProvider implements StyleConstraintProvider {
+public class FileStyleConstraintProvider implements StyleConstraintStore {
 
     private static final Logger log = LoggerFactory.getLogger(FileStyleConstraintProvider.class);
     private static final String BUNDLED = "style/default.json";
@@ -25,7 +25,7 @@ public class FileStyleConstraintProvider implements StyleConstraintProvider {
     private final boolean enabled;
     private final Path externalFile;
     private final ObjectMapper objectMapper;
-    private final Optional<StyleConstraint> cached;
+    private volatile StyleConstraint current;
 
     public FileStyleConstraintProvider(StyleConstraintProperties props, ObjectMapper objectMapper) {
         this.enabled = props.isEnabled();
@@ -33,12 +33,37 @@ public class FileStyleConstraintProvider implements StyleConstraintProvider {
                 ? null
                 : Paths.get(props.getFile()).toAbsolutePath().normalize();
         this.objectMapper = objectMapper;
-        this.cached = load();
+        this.current = load().orElse(null);
     }
 
     @Override
     public Optional<StyleConstraint> get() {
-        return enabled ? cached : Optional.empty();
+        return enabled ? Optional.ofNullable(current) : Optional.empty();
+    }
+
+    @Override
+    public Optional<StyleConstraint> current() {
+        return Optional.ofNullable(current);
+    }
+
+    @Override
+    public StyleConstraint save(StyleConstraint constraint) {
+        if (externalFile == null) {
+            throw new IllegalStateException("未配置 mira.style.file，无法保存风格约束");
+        }
+        try {
+            if (externalFile.getParent() != null) {
+                Files.createDirectories(externalFile.getParent());
+            }
+            Files.writeString(externalFile,
+                    objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(constraint),
+                    StandardCharsets.UTF_8);
+            this.current = constraint;
+            log.info("Saved style constraint to {}", externalFile);
+            return constraint;
+        } catch (IOException e) {
+            throw new RuntimeException("保存风格约束失败: " + e.getMessage(), e);
+        }
     }
 
     private Optional<StyleConstraint> load() {
