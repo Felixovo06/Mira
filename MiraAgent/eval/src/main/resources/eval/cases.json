@@ -1,0 +1,75 @@
+[
+  {
+    "id": "basic_greet",
+    "category": "basic_chat",
+    "userMessage": "你好呀，今天心情不错～",
+    "enabledTools": ["calculator", "web_fetch"],
+    "expectNoTool": true
+  },
+  {
+    "id": "basic_selfintro",
+    "category": "basic_chat",
+    "userMessage": "用一句话介绍一下你自己",
+    "enabledTools": ["calculator", "web_fetch"],
+    "expectNoTool": true
+  },
+  {
+    "id": "basic_joke",
+    "category": "basic_chat",
+    "userMessage": "给我讲个简短的冷笑话",
+    "enabledTools": ["calculator", "web_fetch"],
+    "expectNoTool": true
+  },
+  {
+    "id": "tool_calc_paren",
+    "category": "tool_call",
+    "userMessage": "帮我算一下 (3+4)*2 等于多少",
+    "enabledTools": ["calculator"],
+    "expectedTool": "calculator",
+    "expectedParams": { "expression": "(3+4)*2" },
+    "assertContains": ["14"]
+  },
+  {
+    "id": "tool_calc_div",
+    "category": "tool_call",
+    "userMessage": "计算一下 100 除以 4",
+    "enabledTools": ["calculator"],
+    "expectedTool": "calculator",
+    "assertContains": ["25"]
+  },
+  {
+    "id": "tool_web_search",
+    "category": "tool_call",
+    "userMessage": "用联网搜索查一下 OpenAI 这家公司的总部在哪个城市",
+    "enabledTools": ["mcp__exa__web_search_exa", "mcp__exa__web_fetch_exa"],
+    "expectedTool": "mcp__exa__web_search_exa"
+  },
+  {
+    "id": "tool_web_fetch",
+    "category": "tool_call",
+    "userMessage": "抓取 https://example.com 这个网页，告诉我页面标题是什么",
+    "enabledTools": ["web_fetch"],
+    "expectedTool": "web_fetch",
+    "expectedParams": { "url": "example.com" },
+    "assertContains": ["Example"]
+  },
+  {
+    "id": "persona_mira",
+    "category": "persona",
+    "userMessage": "你是谁？用你自己的风格回答我",
+    "characterId": "mira"
+  },
+  {
+    "id": "persona_study_buddy",
+    "category": "persona",
+    "userMessage": "帮我规划一下今晚两个小时的学习",
+    "characterId": "study-buddy"
+  },
+  {
+    "id": "edge_no_tool_temptation",
+    "category": "edge_case",
+    "userMessage": "你觉得学好数学这件事重要吗？聊聊你的看法",
+    "enabledTools": ["calculator"],
+    "expectNoTool": true
+  }
+]

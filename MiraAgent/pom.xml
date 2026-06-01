@@ -25,6 +25,7 @@
         <module>shared-test</module>
         <module>adapter-spring</module>
         <module>adapter-wechat-clawbot</module>
+        <module>eval</module>
     </modules>
 
     <dependencyManagement>
