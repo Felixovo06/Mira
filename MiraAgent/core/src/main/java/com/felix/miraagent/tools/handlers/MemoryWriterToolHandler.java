@@ -68,7 +68,9 @@ public class MemoryWriterToolHandler implements ToolHandler {
             if (userId == null || userId.isBlank()) {
                 return ToolExecutionResult.error(toolCallId, "write_memory", "Missing user context");
             }
-            String characterId = arguments.has("character_id") ? arguments.path("character_id").asText(null) : null;
+            String characterId = arguments.has("character_id")
+                    ? arguments.path("character_id").asText(null)
+                    : (context != null ? context.getCharacterId() : null);
 
             MemoryWriteRequest request = MemoryWriteRequest.builder()
                     .memoryId(UUID.randomUUID().toString())

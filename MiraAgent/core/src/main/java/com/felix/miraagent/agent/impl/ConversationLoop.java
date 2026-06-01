@@ -323,6 +323,7 @@ public class ConversationLoop {
 
                 var dispatchCtx = ToolDispatchContext.builder()
                         .runId(runId).sessionId(sessionId).userId(request.getUserId())
+                        .characterId(request.getCharacterProfile() != null ? request.getCharacterProfile().getId() : null)
                         .permissionPolicy(request.getPermissionPolicy())
                         .build();
 

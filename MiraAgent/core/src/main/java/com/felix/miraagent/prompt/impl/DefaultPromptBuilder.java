@@ -5,19 +5,31 @@ import com.felix.miraagent.model.MessageRole;
 import com.felix.miraagent.prompt.PromptBuildRequest;
 import com.felix.miraagent.prompt.PromptBuildResult;
 import com.felix.miraagent.prompt.PromptBuilder;
+import com.felix.miraagent.style.StyleConstraintProvider;
 
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 public class DefaultPromptBuilder implements PromptBuilder {
 
     private final CharacterPromptComposer characterComposer;
     private final ToolSchemaInjector toolInjector;
+    private final StyleConstraintComposer styleComposer;
+    private final StyleConstraintProvider styleConstraintProvider;
 
     public DefaultPromptBuilder() {
+        this(null);
+    }
+
+    public DefaultPromptBuilder(StyleConstraintProvider styleConstraintProvider) {
         this.characterComposer = new CharacterPromptComposer();
         this.toolInjector = new ToolSchemaInjector();
+        this.styleComposer = new StyleConstraintComposer();
+        this.styleConstraintProvider = styleConstraintProvider;
     }
 
     @Override
@@ -37,6 +49,14 @@ public class DefaultPromptBuilder implements PromptBuilder {
 
     private String buildStableSystemPrompt(PromptBuildRequest request) {
         var parts = new ArrayList<String>();
+
+        // 全局风格约束(世界设定+回复风格)：最稳定、凌驾于单个角色之上，置于最前以利 prefix caching
+        if (styleConstraintProvider != null) {
+            String styleSection = styleComposer.compose(styleConstraintProvider.get().orElse(null));
+            if (hasText(styleSection)) {
+                parts.add(styleSection);
+            }
+        }
 
         String characterSection = characterComposer.compose(request.getCharacterProfile());
         if (!characterSection.isBlank()) {
@@ -67,8 +87,16 @@ public class DefaultPromptBuilder implements PromptBuilder {
         return String.join("\n\n---\n\n", parts);
     }
 
+    private static final DateTimeFormatter TIME_FMT =
+            DateTimeFormatter.ofPattern("yyyy年MM月dd日 HH:mm (EEE)", Locale.CHINESE);
+
     private String buildEphemeralPrompt(PromptBuildRequest request) {
-        return hasText(request.getTemporaryInstructions()) ? request.getTemporaryInstructions() : "";
+        var parts = new ArrayList<String>();
+        parts.add("当前时间：" + ZonedDateTime.now().format(TIME_FMT));
+        if (hasText(request.getTemporaryInstructions())) {
+            parts.add(request.getTemporaryInstructions());
+        }
+        return String.join("\n", parts);
     }
 
     private List<Message> buildMessages(String stableSystemPrompt, String ephemeralPrompt, PromptBuildRequest request) {
@@ -101,9 +129,8 @@ public class DefaultPromptBuilder implements PromptBuilder {
                     String combined = hasText(orig.getContent())
                             ? orig.getContent() + "\n\n[Instructions]\n" + ephemeralPrompt
                             : ephemeralPrompt;
-                    messages.add(Message.builder()
-                            .id(orig.getId())
-                            .role(orig.getRole())
+                    // 用 toBuilder 保留 imageDataUrls 等字段，只覆盖 content
+                    messages.add(orig.toBuilder()
                             .content(combined)
                             .build());
                 } else {

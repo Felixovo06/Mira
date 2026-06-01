@@ -9,5 +9,6 @@ public class ToolDispatchContext {
     String runId;
     String sessionId;
     String userId;
+    String characterId;
     ToolPermissionPolicy permissionPolicy;
 }

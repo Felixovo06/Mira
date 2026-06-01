@@ -43,7 +43,9 @@ public class RecallMemoryToolHandler implements ToolHandler {
     public ToolExecutionResult execute(String toolCallId, JsonNode arguments, ToolDispatchContext context) {
         try {
             String query = arguments.path("query").asText("");
-            String characterId = arguments.has("character_id") ? arguments.path("character_id").asText(null) : null;
+            String characterId = arguments.has("character_id")
+                    ? arguments.path("character_id").asText(null)
+                    : (context != null ? context.getCharacterId() : null);
             String userId = context != null ? context.getUserId() : null;
             if (userId == null || userId.isBlank()) {
                 return ToolExecutionResult.error(toolCallId, "recall_memory", "Missing user context");

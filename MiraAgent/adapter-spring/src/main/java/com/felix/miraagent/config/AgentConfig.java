@@ -21,6 +21,7 @@ import com.felix.miraagent.session.SessionStore;
 import com.felix.miraagent.session.impl.InMemorySessionStore;
 import com.felix.miraagent.skill.SkillIndexInjector;
 import com.felix.miraagent.skill.SkillLoader;
+import com.felix.miraagent.style.StyleConstraintProvider;
 import com.felix.miraagent.tools.ToolDispatcher;
 import com.felix.miraagent.tools.ToolExecutionStore;
 import com.felix.miraagent.character.CharacterRepository;
@@ -118,8 +119,8 @@ public class AgentConfig {
 
     @Bean
     @ConditionalOnMissingBean(PromptBuilder.class)
-    public PromptBuilder promptBuilder() {
-        return new DefaultPromptBuilder();
+    public PromptBuilder promptBuilder(Optional<StyleConstraintProvider> styleConstraintProvider) {
+        return new DefaultPromptBuilder(styleConstraintProvider.orElse(null));
     }
 
     @Bean
