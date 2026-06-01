@@ -29,6 +29,10 @@ import com.felix.miraagent.tools.artifact.ToolResultCache;
 import com.felix.miraagent.tools.builtin.BuiltinTools;
 import com.felix.miraagent.tools.handlers.MemoryWriterToolHandler;
 import com.felix.miraagent.tools.handlers.RecallMemoryToolHandler;
+import com.felix.miraagent.tools.handlers.SkillManageToolHandler;
+import com.felix.miraagent.tools.handlers.SkillViewToolHandler;
+import com.felix.miraagent.tools.handlers.SkillsListToolHandler;
+import com.felix.miraagent.skill.SkillManager;
 import com.felix.miraagent.tools.impl.DefaultToolDispatcher;
 import com.felix.miraagent.tools.impl.InMemoryToolExecutionStore;
 import com.felix.miraagent.tools.impl.InMemoryToolRegistry;
@@ -66,13 +70,19 @@ public class AgentConfig {
     @Bean
     @ConditionalOnMissingBean(ToolRegistry.class)
     public ToolRegistry toolRegistry(Optional<MemoryRetriever> memoryRetriever,
-                                     Optional<SerializedMemoryWriter> memoryWriter) {
+                                     Optional<SerializedMemoryWriter> memoryWriter,
+                                     Optional<SkillManager> skillManager) {
         InMemoryToolRegistry registry = new InMemoryToolRegistry();
         BuiltinTools.registerAll(registry);
         memoryRetriever.ifPresent(r ->
                 registry.register(RecallMemoryToolHandler.definition(), new RecallMemoryToolHandler(r)));
         memoryWriter.ifPresent(w ->
                 registry.register(MemoryWriterToolHandler.definition(), new MemoryWriterToolHandler(w)));
+        skillManager.ifPresent(m -> {
+            registry.register(SkillsListToolHandler.definition(), new SkillsListToolHandler(m));
+            registry.register(SkillViewToolHandler.definition(), new SkillViewToolHandler(m));
+            registry.register(SkillManageToolHandler.definition(), new SkillManageToolHandler(m));
+        });
         return registry;
     }
 

@@ -11,7 +11,7 @@ import java.util.List;
  * 也是 curator 统计/去重检索的查询对象。skill 是 Agent 全局能力，不挂 userId。
  */
 @Value
-@Builder
+@Builder(toBuilder = true)
 public class SkillIndex {
     String skillId;
     String name;
