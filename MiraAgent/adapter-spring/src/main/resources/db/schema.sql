@@ -84,3 +84,8 @@ create table if not exists memory_index (
 create index if not exists idx_memory_index_user_id on memory_index(user_id, scope, category) where archived_at is null;
 create index if not exists idx_memory_index_preview_trgm on memory_index using gin(content_preview gin_trgm_ops);
 create index if not exists idx_memory_index_fts on memory_index using gin(to_tsvector('simple', coalesce(content_preview, '')));
+
+-- P1 Step5: pgvector embedding
+create extension if not exists vector;
+alter table memory_index add column if not exists embedding vector(1536);
+create index if not exists idx_memory_index_embedding on memory_index using ivfflat (embedding vector_cosine_ops) with (lists = 100);
