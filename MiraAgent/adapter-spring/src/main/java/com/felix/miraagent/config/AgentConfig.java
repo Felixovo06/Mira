@@ -23,6 +23,7 @@ import com.felix.miraagent.skill.SkillIndexInjector;
 import com.felix.miraagent.skill.SkillLoader;
 import com.felix.miraagent.tools.ToolDispatcher;
 import com.felix.miraagent.tools.ToolExecutionStore;
+import com.felix.miraagent.character.CharacterRepository;
 import com.felix.miraagent.tools.ToolRegistry;
 import com.felix.miraagent.tools.artifact.ArtifactProperties;
 import com.felix.miraagent.tools.artifact.FileToolResultCache;
@@ -154,13 +155,15 @@ public class AgentConfig {
 
     @Bean
     public AgentRuntime agentRuntime(ConversationLoop conversationLoop, SessionStore sessionStore,
-                                     ModelProperties modelProperties, ToolsProperties toolsProperties) {
+                                     ModelProperties modelProperties, ToolsProperties toolsProperties,
+                                     Optional<CharacterRepository> characterRepository) {
         ModelConfig defaultModelConfig = ModelConfig.builder()
                 .modelName(modelProperties.getName())
                 .temperature(modelProperties.getTemperature())
                 .maxTokens(modelProperties.getMaxTokens())
                 .build();
         var permissionPolicy = new RiskThresholdToolPermissionPolicy(toolsProperties.getMaxRiskLevel());
-        return new DefaultAgentRuntime(conversationLoop, sessionStore, defaultModelConfig, permissionPolicy);
+        return new DefaultAgentRuntime(conversationLoop, sessionStore, defaultModelConfig,
+                permissionPolicy, characterRepository.orElse(null));
     }
 }

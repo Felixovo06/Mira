@@ -47,6 +47,11 @@ mira:
     file:
       base-dir: ${MIRA_TOOLS_FILE_DIR:${user.home}/.miraagent/files}
 
+  # 角色卡：内置示例卡随 classpath(resources/characters/*.json) 加载；
+  # 用户导入的卡存到 base-dir（同 id 覆盖内置）。
+  character:
+    base-dir: ${MIRA_CHARACTER_DIR:${user.home}/.miraagent/characters}
+
 logging:
   level:
     com.felix.miraagent: DEBUG

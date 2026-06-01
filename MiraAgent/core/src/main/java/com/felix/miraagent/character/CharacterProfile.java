@@ -3,11 +3,13 @@ package com.felix.miraagent.character;
 import lombok.Builder;
 import lombok.Singular;
 import lombok.Value;
+import lombok.extern.jackson.Jacksonized;
 
 import java.util.List;
 
 @Value
 @Builder
+@Jacksonized
 public class CharacterProfile {
     String id;
     String name;

@@ -179,7 +179,16 @@ curl -s localhost:8080/api/tool-executions/runs/{runId}
 curl -s 'localhost:8080/api/memory?userId=u1'
 ```
 
-REST 路由一览：`/api/chat`、`/api/chat/stream`、`/api/runs/{id}/interrupt`、`/api/sessions/{id}/messages`、`/api/memory`(GET/DELETE/ban-category)、`/api/traces/{runId}`、`/api/tool-executions/*`、`/api/skills/*`(列表/查看/归档/pin/curator-report)、`/api/health`。
+REST 路由一览：`/api/chat`、`/api/chat/stream`、`/api/runs/{id}/interrupt`、`/api/sessions/{id}/messages`、`/api/characters`(列表/查看/导入)、`/api/memory`(GET/DELETE/ban-category)、`/api/traces/{runId}`、`/api/tool-executions/*`、`/api/skills/*`(列表/查看/归档/pin/curator-report)、`/api/health`。
+
+### 一键 Demo
+
+```bash
+# 服务起好后（profile=local），另开终端：
+./MiraAgent/scripts/demo/run-demo.sh   # 需 curl + jq
+```
+
+学习搭子「小研」陪用户规划复习的完整链路：角色卡 → 写入长期记忆 → 调用 todo 工具 → 跨轮 session/记忆召回 → Background Review 沉淀学习规划 skill，每步打印对应数据/trace 变化。详见 [`scripts/demo/`](MiraAgent/scripts/demo/)（含可落盘的示例记忆/skill）。
 
 ### 启用 MCP
 

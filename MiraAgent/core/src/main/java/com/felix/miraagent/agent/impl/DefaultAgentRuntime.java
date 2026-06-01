@@ -2,6 +2,7 @@ package com.felix.miraagent.agent.impl;
 
 import com.felix.miraagent.agent.*;
 import com.felix.miraagent.character.CharacterProfile;
+import com.felix.miraagent.character.CharacterRepository;
 import com.felix.miraagent.model.Message;
 import com.felix.miraagent.model.MessageRole;
 import com.felix.miraagent.session.Session;
@@ -26,18 +27,26 @@ public class DefaultAgentRuntime implements AgentRuntime {
     private final Map<String, InterruptSignal> activeRuns = new ConcurrentHashMap<>();
     private final ModelConfig defaultModelConfig;
     private final ToolPermissionPolicy permissionPolicy;
+    private final CharacterRepository characterRepository;
 
     public DefaultAgentRuntime(ConversationLoop conversationLoop, SessionStore sessionStore,
                                ModelConfig defaultModelConfig) {
-        this(conversationLoop, sessionStore, defaultModelConfig, new DefaultToolPermissionPolicy());
+        this(conversationLoop, sessionStore, defaultModelConfig, new DefaultToolPermissionPolicy(), null);
     }
 
     public DefaultAgentRuntime(ConversationLoop conversationLoop, SessionStore sessionStore,
                                ModelConfig defaultModelConfig, ToolPermissionPolicy permissionPolicy) {
+        this(conversationLoop, sessionStore, defaultModelConfig, permissionPolicy, null);
+    }
+
+    public DefaultAgentRuntime(ConversationLoop conversationLoop, SessionStore sessionStore,
+                               ModelConfig defaultModelConfig, ToolPermissionPolicy permissionPolicy,
+                               CharacterRepository characterRepository) {
         this.conversationLoop = conversationLoop;
         this.sessionStore = sessionStore;
         this.defaultModelConfig = defaultModelConfig;
         this.permissionPolicy = permissionPolicy != null ? permissionPolicy : new DefaultToolPermissionPolicy();
+        this.characterRepository = characterRepository;
     }
 
     @Override
@@ -116,6 +125,12 @@ public class DefaultAgentRuntime implements AgentRuntime {
     private CharacterProfile resolveCharacter(String characterId) {
         if (characterId == null || "default".equals(characterId)) {
             return CharacterProfile.defaultProfile();
+        }
+        if (characterRepository != null) {
+            var loaded = characterRepository.findById(characterId);
+            if (loaded.isPresent()) {
+                return loaded.get();
+            }
         }
         return CharacterProfile.builder().id(characterId).name(characterId).build();
     }
