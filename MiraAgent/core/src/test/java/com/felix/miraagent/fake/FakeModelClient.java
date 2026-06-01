@@ -22,6 +22,19 @@ public class FakeModelClient implements ModelClient {
         return this;
     }
 
+    public FakeModelClient thenReplyWithUsage(String content, int inputTokens) {
+        responseQueue.add(ChatResponse.builder()
+                .assistantMessage(Message.builder()
+                        .id(UUID.randomUUID().toString())
+                        .role(MessageRole.ASSISTANT)
+                        .content(content)
+                        .build())
+                .usage(UsageInfo.builder().inputTokens(inputTokens).build())
+                .finishReason("stop")
+                .build());
+        return this;
+    }
+
     public FakeModelClient thenCallTool(String toolCallId, String toolName, String arguments) {
         ToolCall toolCall = ToolCall.builder()
                 .id(toolCallId)

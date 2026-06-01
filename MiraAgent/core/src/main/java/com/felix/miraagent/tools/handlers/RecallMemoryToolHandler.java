@@ -5,6 +5,7 @@ import com.felix.miraagent.memory.MemoryRetrieveRequest;
 import com.felix.miraagent.memory.MemoryRetrieveResult;
 import com.felix.miraagent.memory.MemoryRetriever;
 import com.felix.miraagent.tools.ToolDefinition;
+import com.felix.miraagent.tools.ToolDispatchContext;
 import com.felix.miraagent.tools.ToolExecutionResult;
 import com.felix.miraagent.tools.ToolHandler;
 import com.felix.miraagent.tools.ToolRiskLevel;
@@ -35,11 +36,21 @@ public class RecallMemoryToolHandler implements ToolHandler {
 
     @Override
     public ToolExecutionResult execute(String toolCallId, JsonNode arguments) {
+        return execute(toolCallId, arguments, null);
+    }
+
+    @Override
+    public ToolExecutionResult execute(String toolCallId, JsonNode arguments, ToolDispatchContext context) {
         try {
             String query = arguments.path("query").asText("");
             String characterId = arguments.has("character_id") ? arguments.path("character_id").asText(null) : null;
+            String userId = context != null ? context.getUserId() : null;
+            if (userId == null || userId.isBlank()) {
+                return ToolExecutionResult.error(toolCallId, "recall_memory", "Missing user context");
+            }
 
             MemoryRetrieveRequest request = MemoryRetrieveRequest.builder()
+                    .userId(userId)
                     .query(query)
                     .characterId(characterId)
                     .limit(10)

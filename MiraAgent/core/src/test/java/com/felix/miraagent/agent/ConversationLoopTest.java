@@ -1,5 +1,8 @@
 package com.felix.miraagent.agent;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.felix.miraagent.agent.compression.CompressionPolicy;
+import com.felix.miraagent.agent.compression.impl.DefaultContextCompressor;
 import com.felix.miraagent.agent.impl.ConversationLoop;
 import com.felix.miraagent.character.CharacterProfile;
 import com.felix.miraagent.fake.FakeModelClient;
@@ -7,7 +10,11 @@ import com.felix.miraagent.model.Message;
 import com.felix.miraagent.model.MessageRole;
 import com.felix.miraagent.model.StreamDelta;
 import com.felix.miraagent.model.ToolCall;
+import com.felix.miraagent.prompt.PromptBuildRequest;
+import com.felix.miraagent.prompt.PromptBuildResult;
+import com.felix.miraagent.prompt.PromptBuilder;
 import com.felix.miraagent.prompt.impl.DefaultPromptBuilder;
+import com.felix.miraagent.session.Session;
 import com.felix.miraagent.session.impl.InMemorySessionStore;
 import com.felix.miraagent.tools.ToolStatus;
 import com.felix.miraagent.tools.builtin.BuiltinTools;
@@ -19,7 +26,10 @@ import com.felix.miraagent.trace.TraceEventType;
 import com.felix.miraagent.trace.impl.InMemoryTraceStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -207,5 +217,100 @@ class ConversationLoopTest {
         assertTrue(deltas.stream().anyMatch(d -> d.getToolExecutionResult() != null));
         assertTrue(deltas.stream().anyMatch(d -> d.getTraceEvent() != null));
         assertTrue(deltas.stream().anyMatch(StreamDelta::isDone));
+    }
+
+    @Test
+    void compressedSummaryIsPersistedAndReusedAsActiveContext(@TempDir Path tempDir) {
+        var policy = CompressionPolicy.builder()
+                .highWatermark(0.1)
+                .lowWatermark(0.05)
+                .maxContextTokens(10)
+                .protectFirstMessages(1)
+                .protectRecentRounds(1)
+                .build();
+        var compressor = new DefaultContextCompressor(tempDir.toString(), new ObjectMapper());
+        var sessionId = "compress-session";
+
+        Message first = userMessage("first instruction");
+        Message oldAssistant = Message.builder().id("old-a").role(MessageRole.ASSISTANT).content("old answer").build();
+        Message oldUser = Message.builder().id("old-u").role(MessageRole.USER).content("old detail").build();
+        Message recentAssistant = Message.builder().id("recent-a").role(MessageRole.ASSISTANT).content("recent answer").build();
+        Message currentUser = userMessage("current question");
+
+        sessionStore.createSession(Session.builder().id(sessionId).userId("u1").build());
+        for (Message m : List.of(first, oldAssistant, oldUser, recentAssistant, currentUser)) {
+            sessionStore.appendMessage(sessionId, m);
+        }
+
+        fakeModel.thenReplyWithUsage("final answer", 2)
+                .thenReply("{\"memory_writes\":[],\"summary\":\"compressed middle\"}");
+        var compressingLoop = new ConversationLoop(
+                fakeModel,
+                new DefaultPromptBuilder(),
+                toolRegistry,
+                new DefaultToolDispatcher(toolRegistry),
+                sessionStore,
+                traceStore,
+                toolExecutionStore,
+                null,
+                null,
+                null,
+                null,
+                compressor,
+                policy
+        );
+
+        compressingLoop.run(buildRequest(sessionId, List.of(first, oldAssistant, oldUser, recentAssistant, currentUser)));
+
+        assertTrue(sessionStore.loadMessages(sessionId).stream()
+                .anyMatch(m -> m.getContent() != null && m.getContent().contains("[Context Summary checkpoint=")));
+
+        CapturingPromptBuilder capturingPromptBuilder = new CapturingPromptBuilder();
+        var nextModel = new FakeModelClient().thenReply("next answer");
+        var nextLoop = new ConversationLoop(
+                nextModel,
+                capturingPromptBuilder,
+                toolRegistry,
+                new DefaultToolDispatcher(toolRegistry),
+                sessionStore,
+                traceStore,
+                toolExecutionStore,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                tempDir.toString()
+        );
+        Message nextUser = userMessage("next question");
+        sessionStore.appendMessage(sessionId, nextUser);
+        List<Message> nextMessages = new ArrayList<>(sessionStore.loadMessages(sessionId));
+
+        nextLoop.run(buildRequest(sessionId, nextMessages));
+
+        assertTrue(capturingPromptBuilder.capturedHistory.stream()
+                .anyMatch(m -> m.getContent() != null && m.getContent().contains("compressed middle")));
+        assertTrue(capturingPromptBuilder.capturedRetrievedMemories.stream()
+                .anyMatch(memory -> memory.contains("compressed middle")));
+        assertFalse(capturingPromptBuilder.capturedHistory.stream()
+                .anyMatch(m -> "old-a".equals(m.getId())));
+        assertFalse(capturingPromptBuilder.capturedHistory.stream()
+                .anyMatch(m -> "old-u".equals(m.getId())));
+        assertTrue(capturingPromptBuilder.capturedHistory.stream()
+                .anyMatch(m -> "recent-a".equals(m.getId())));
+    }
+
+    private static class CapturingPromptBuilder implements PromptBuilder {
+        private final PromptBuilder delegate = new DefaultPromptBuilder();
+        private List<Message> capturedHistory = List.of();
+        private List<String> capturedRetrievedMemories = List.of();
+
+        @Override
+        public PromptBuildResult build(PromptBuildRequest request) {
+            capturedHistory = request.getSessionHistory();
+            capturedRetrievedMemories = request.getRetrievedMemories();
+            return delegate.build(request);
+        }
     }
 }

@@ -86,6 +86,7 @@ create index if not exists idx_memory_index_preview_trgm on memory_index using g
 create index if not exists idx_memory_index_fts on memory_index using gin(to_tsvector('simple', coalesce(content_preview, '')));
 
 -- P1 Step5: pgvector embedding
-create extension if not exists vector;
-alter table memory_index add column if not exists embedding vector(1536);
-create index if not exists idx_memory_index_embedding on memory_index using ivfflat (embedding vector_cosine_ops) with (lists = 100);
+-- Optional deployment step when pgvector is installed:
+-- create extension if not exists vector;
+-- alter table memory_index add column if not exists embedding vector(1536);
+-- create index if not exists idx_memory_index_embedding on memory_index using ivfflat (embedding vector_cosine_ops) with (lists = 100);

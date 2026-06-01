@@ -3,6 +3,9 @@ package com.felix.miraagent.api.controller;
 import com.felix.miraagent.memory.MemoryIndex;
 import com.felix.miraagent.memory.MemoryIndexRepository;
 import com.felix.miraagent.memory.MemoryStore;
+import com.felix.miraagent.memory.MemoryCategory;
+import com.felix.miraagent.memory.MemoryWritePolicy;
+import com.felix.miraagent.memory.SerializedMemoryWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -20,11 +23,17 @@ public class MemoryManagementController {
 
     private final Optional<MemoryIndexRepository> indexRepository;
     private final Optional<MemoryStore> memoryStore;
+    private final Optional<SerializedMemoryWriter> memoryWriter;
+    private final Optional<MemoryWritePolicy> memoryWritePolicy;
 
     public MemoryManagementController(Optional<MemoryIndexRepository> indexRepository,
-                                      Optional<MemoryStore> memoryStore) {
+                                      Optional<MemoryStore> memoryStore,
+                                      Optional<SerializedMemoryWriter> memoryWriter,
+                                      Optional<MemoryWritePolicy> memoryWritePolicy) {
         this.indexRepository = indexRepository;
         this.memoryStore = memoryStore;
+        this.memoryWriter = memoryWriter;
+        this.memoryWritePolicy = memoryWritePolicy;
     }
 
     @GetMapping
@@ -48,8 +57,12 @@ public class MemoryManagementController {
         if (userId == null || userId.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        indexRepository.ifPresent(r -> r.archive(userId, memoryId));
-        memoryStore.ifPresent(s -> s.archive(userId, memoryId));
+        if (memoryWriter.isPresent()) {
+            memoryWriter.get().archive(userId, memoryId);
+        } else {
+            indexRepository.ifPresent(r -> r.archive(userId, memoryId));
+            memoryStore.ifPresent(s -> s.archive(userId, memoryId));
+        }
         return ResponseEntity.noContent().build();
     }
 
@@ -57,7 +70,16 @@ public class MemoryManagementController {
     public ResponseEntity<Map<String, String>> banCategory(@RequestBody Map<String, String> body) {
         String userId = body.get("userId");
         String category = body.get("category");
-        log.info("ban-category requested: userId={}, category={}", userId, category);
-        return ResponseEntity.ok(Map.of("message", "ban recorded (not yet enforced in v1)"));
+        if (userId == null || userId.isBlank() || category == null || category.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId and category are required"));
+        }
+        try {
+            MemoryCategory memoryCategory = MemoryCategory.valueOf(category.trim().toUpperCase());
+            memoryWritePolicy.ifPresent(policy -> policy.banCategory(userId, memoryCategory));
+            log.info("ban-category recorded: userId={}, category={}", userId, memoryCategory);
+            return ResponseEntity.ok(Map.of("message", "ban recorded", "category", memoryCategory.name()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid category: " + category));
+        }
     }
 }

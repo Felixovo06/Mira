@@ -18,9 +18,11 @@ import org.springframework.jdbc.core.RowMapper;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 public class JdbcHybridMemoryRetriever implements MemoryRetriever {
@@ -53,27 +55,35 @@ public class JdbcHybridMemoryRetriever implements MemoryRetriever {
 
         int limit = request.getLimit() > 0 ? request.getLimit() : 10;
 
-        List<MemoryIndex> lexicalHits = lexicalRetriever.retrieve(request).getHits();
+        CompletableFuture<List<MemoryIndex>> lexicalFuture = CompletableFuture
+                .supplyAsync(() -> lexicalRetriever.retrieve(request).getHits())
+                .exceptionally(e -> {
+                    log.warn("Lexical search failed", e);
+                    return Collections.emptyList();
+                });
 
-        List<MemoryIndex> vectorHits = Collections.emptyList();
+        CompletableFuture<List<MemoryIndex>> vectorFuture = embeddingClient != null
+                ? CompletableFuture.supplyAsync(() -> vectorHits(request, limit))
+                : CompletableFuture.completedFuture(Collections.emptyList());
 
-        if (embeddingClient != null) {
-            try {
-                List<Float> queryVector = embeddingClient.embed(request.getQuery());
-                vectorHits = fetchVectorHits(queryVector, request.getUserId(), limit * 2);
-            } catch (EmbeddingException e) {
-                log.warn("Embedding failed, falling back to lexical only: {}", e.getMessage());
-            } catch (Exception e) {
-                log.warn("Vector search failed, falling back to lexical only", e);
-            }
-        }
-
-        List<MemoryIndex> merged = rrf(lexicalHits, vectorHits, limit);
+        List<MemoryIndex> merged = rerank(rrf(lexicalFuture.join(), vectorFuture.join(), limit * 2), request, limit);
 
         return MemoryRetrieveResult.builder()
                 .hits(merged)
                 .queryUsed(request.getQuery())
                 .build();
+    }
+
+    private List<MemoryIndex> vectorHits(MemoryRetrieveRequest request, int limit) {
+        try {
+            List<Float> queryVector = embeddingClient.embed(request.getQuery());
+            return fetchVectorHits(queryVector, request.getUserId(), limit * 2);
+        } catch (EmbeddingException e) {
+            log.warn("Embedding failed, falling back to lexical only: {}", e.getMessage());
+        } catch (Exception e) {
+            log.warn("Vector search failed, falling back to lexical only", e);
+        }
+        return Collections.emptyList();
     }
 
     private List<MemoryIndex> fetchVectorHits(List<Float> queryVector, String userId, int fetchLimit) {
@@ -119,6 +129,46 @@ public class JdbcHybridMemoryRetriever implements MemoryRetriever {
                 .limit(limit)
                 .map(e -> byId.get(e.getKey()))
                 .toList();
+    }
+
+    private List<MemoryIndex> rerank(List<MemoryIndex> merged, MemoryRetrieveRequest request, int limit) {
+        Map<String, Integer> originalRank = new LinkedHashMap<>();
+        for (int i = 0; i < merged.size(); i++) {
+            originalRank.put(merged.get(i).getId(), i);
+        }
+        return merged.stream()
+                .sorted(Comparator
+                        .comparingDouble((MemoryIndex index) -> rerankScore(index, request)).reversed()
+                        .thenComparingInt(index -> originalRank.getOrDefault(index.getId(), Integer.MAX_VALUE)))
+                .limit(limit)
+                .toList();
+    }
+
+    private double rerankScore(MemoryIndex index, MemoryRetrieveRequest request) {
+        double score = 0.0;
+        if (request.getCharacterId() != null && request.getCharacterId().equals(index.getCharacterId())) {
+            score += 3.0;
+        }
+        score += categoryWeight(index.getCategory());
+        Instant recency = index.getUpdatedAt() != null ? index.getUpdatedAt() : index.getCreatedAt();
+        if (recency != null) {
+            score += recency.toEpochMilli() / 1_000_000_000_000.0;
+        }
+        return score;
+    }
+
+    private double categoryWeight(MemoryCategory category) {
+        if (category == null) {
+            return 0.0;
+        }
+        return switch (category) {
+            case PROFILE -> 1.0;
+            case PREFERENCE -> 0.9;
+            case RELATIONSHIP -> 0.8;
+            case GOAL -> 0.6;
+            case EVENT -> 0.4;
+            case SUMMARY -> 0.2;
+        };
     }
 
     private String toVectorString(List<Float> vec) {

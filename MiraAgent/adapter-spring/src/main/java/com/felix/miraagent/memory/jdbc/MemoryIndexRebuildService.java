@@ -130,6 +130,7 @@ public class MemoryIndexRebuildService {
             MemoryIndex index = MemoryIndex.builder()
                     .id(memoryId)
                     .userId(userId)
+                    .characterId(inferCharacterId(userDir, mdFile))
                     .scope(scope)
                     .category(category)
                     .contentPreview(contentPreview)
@@ -267,6 +268,14 @@ public class MemoryIndexRebuildService {
             return MemoryCategory.SUMMARY;
         }
         return MemoryCategory.EVENT;
+    }
+
+    private String inferCharacterId(Path userDir, Path mdFile) {
+        Path rel = userDir.relativize(mdFile);
+        if (rel.getNameCount() >= 3 && "characters".equals(rel.getName(0).toString())) {
+            return rel.getName(1).toString();
+        }
+        return null;
     }
 
     /**

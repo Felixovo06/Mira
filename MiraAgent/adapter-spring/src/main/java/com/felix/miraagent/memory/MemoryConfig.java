@@ -5,15 +5,15 @@ import com.felix.miraagent.memory.jdbc.JdbcHybridMemoryRetriever;
 import com.felix.miraagent.memory.jdbc.JdbcMemoryIndexRepository;
 import com.felix.miraagent.memory.jdbc.JdbcMemoryRetriever;
 import com.felix.miraagent.memory.jdbc.MemoryIndexRebuildService;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import com.felix.miraagent.config.UsableDataSourceCondition;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import javax.sql.DataSource;
 import java.util.Optional;
 
 @Configuration
@@ -26,18 +26,29 @@ public class MemoryConfig {
     }
 
     @Bean
-    public SerializedMemoryWriter blockingQueueMemoryWriter(MemoryStore memoryStore) {
-        return new BlockingQueueMemoryWriter(memoryStore);
+    public MemoryWritePolicy memoryWritePolicy() {
+        return new InMemoryMemoryWritePolicy();
     }
 
     @Bean
-    @ConditionalOnBean(DataSource.class)
+    public SerializedMemoryWriter blockingQueueMemoryWriter(MemoryStore memoryStore,
+                                                            Optional<MemoryIndexRepository> memoryIndexRepository,
+                                                            Optional<AsyncEmbeddingIndexer> asyncEmbeddingIndexer,
+                                                            Optional<MemoryWritePolicy> memoryWritePolicy) {
+        return new BlockingQueueMemoryWriter(memoryStore,
+                memoryIndexRepository.orElse(null),
+                asyncEmbeddingIndexer.orElse(null),
+                memoryWritePolicy.orElse(null));
+    }
+
+    @Bean
+    @Conditional(UsableDataSourceCondition.class)
     public MemoryIndexRepository memoryIndexRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
         return new JdbcMemoryIndexRepository(jdbcTemplate, objectMapper);
     }
 
     @Bean
-    @ConditionalOnBean(DataSource.class)
+    @Conditional(UsableDataSourceCondition.class)
     public MemoryIndexRebuildService memoryIndexRebuildService(MemoryStore memoryStore,
                                                                MemoryIndexRepository memoryIndexRepository,
                                                                MemoryProperties memoryProperties) {
@@ -45,14 +56,14 @@ public class MemoryConfig {
     }
 
     @Bean
-    @ConditionalOnBean(DataSource.class)
+    @Conditional(UsableDataSourceCondition.class)
     public JdbcMemoryRetriever jdbcLexicalRetriever(JdbcTemplate jdbc, ObjectMapper objectMapper) {
         return new JdbcMemoryRetriever(jdbc, objectMapper);
     }
 
     @Bean
     @Primary
-    @ConditionalOnBean(DataSource.class)
+    @Conditional(UsableDataSourceCondition.class)
     public MemoryRetriever hybridMemoryRetriever(JdbcMemoryRetriever lexical,
                                                  JdbcTemplate jdbc,
                                                  ObjectMapper objectMapper,
@@ -61,7 +72,7 @@ public class MemoryConfig {
     }
 
     @Bean
-    @ConditionalOnBean(DataSource.class)
+    @Conditional(UsableDataSourceCondition.class)
     public AsyncEmbeddingIndexer asyncEmbeddingIndexer(JdbcTemplate jdbc, Optional<EmbeddingClient> embeddingClient) {
         return new AsyncEmbeddingIndexer(jdbc, embeddingClient.orElse(null));
     }

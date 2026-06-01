@@ -103,13 +103,17 @@ public class AgentConfig {
                                              ToolExecutionStore toolExecutionStore,
                                              Optional<MemoryStore> memoryStore,
                                              Optional<MemoryRetriever> memoryRetriever,
+                                             Optional<SerializedMemoryWriter> memoryWriter,
                                              Optional<ToolResultCache> toolResultCache,
-                                             Optional<ContextCompressor> compressor) {
+                                             Optional<ContextCompressor> compressor,
+                                             SummaryProperties summaryProperties) {
         return new ConversationLoop(modelClient, promptBuilder, toolRegistry, toolDispatcher,
                 sessionStore, traceStore, toolExecutionStore,
                 memoryStore.orElse(null), memoryRetriever.orElse(null),
+                memoryWriter.orElse(null),
                 toolResultCache.orElse(null),
-                compressor.orElse(null), CompressionPolicy.defaultPolicy());
+                compressor.orElse(null), CompressionPolicy.defaultPolicy(),
+                summaryProperties.getBaseDir());
     }
 
     @Bean

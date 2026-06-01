@@ -5,8 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.felix.miraagent.agent.compression.*;
 import com.felix.miraagent.memory.MemoryCategory;
 import com.felix.miraagent.memory.MemoryScope;
-import com.felix.miraagent.memory.MemoryStore;
 import com.felix.miraagent.memory.MemoryWriteRequest;
+import com.felix.miraagent.memory.SerializedMemoryWriter;
 import com.felix.miraagent.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,35 +43,22 @@ public class DefaultContextCompressor implements ContextCompressor {
             String characterId,
             CompressionPolicy policy,
             ModelClient modelClient,
-            MemoryStore memoryStore) {
+            SerializedMemoryWriter memoryWriter) {
 
         int historySize = conversationHistory.size();
         int protectedFirst = Math.min(policy.getProtectFirstMessages(), historySize);
         int protectedTailCount = policy.getProtectRecentRounds() * 2;
 
         int midStart = protectedFirst;
-        int midEnd = historySize - protectedTailCount;
+        int protectedTailStart = historySize - protectedTailCount;
+        int midEnd = chooseMidEndForLowWatermark(conversationHistory, midStart, protectedTailStart, policy);
 
         if (midEnd <= midStart) {
             return CompressResult.builder().compressed(false).build();
         }
 
-        // Adjust start boundary: don't begin mid with a TOOL message (would orphan a tool result)
-        while (midStart < midEnd && conversationHistory.get(midStart).getRole() == MessageRole.TOOL) {
-            midStart++;
-        }
-
-        // Adjust end boundary: don't end mid with an ASSISTANT that has tool calls (would orphan tool results)
-        while (midEnd > midStart) {
-            Message lastMid = conversationHistory.get(midEnd - 1);
-            if (lastMid.getRole() == MessageRole.ASSISTANT
-                    && lastMid.getToolCalls() != null
-                    && !lastMid.getToolCalls().isEmpty()) {
-                midEnd--;
-            } else {
-                break;
-            }
-        }
+        midStart = adjustStartBoundary(conversationHistory, midStart, midEnd);
+        midEnd = adjustEndBoundary(conversationHistory, midStart, midEnd);
 
         if (midEnd <= midStart) {
             return CompressResult.builder().compressed(false).build();
@@ -140,10 +127,10 @@ public class DefaultContextCompressor implements ContextCompressor {
             summaryText = rawContent;
         }
 
-        if (memoryStore != null) {
+        if (memoryWriter != null) {
             for (MemoryWriteRequest req : memoryWrites) {
                 try {
-                    memoryStore.write(req);
+                    memoryWriter.submit(req);
                 } catch (Exception e) {
                     log.warn("Failed to write memory during compression. sessionId={}", sessionId, e);
                 }
@@ -156,7 +143,9 @@ public class DefaultContextCompressor implements ContextCompressor {
         Message summaryMessage = Message.builder()
                 .id(UUID.randomUUID().toString())
                 .role(MessageRole.USER)
-                .content("[Context Summary]\n" + summaryText)
+                .content("[Context Summary checkpoint=" + checkpointId
+                        + " first=" + firstRemovedId
+                        + " last=" + lastRemovedId + "]\n" + summaryText)
                 .build();
 
         List<Message> protectedFirstList = new ArrayList<>(conversationHistory.subList(0, midStart));
@@ -178,6 +167,84 @@ public class DefaultContextCompressor implements ContextCompressor {
                 .build();
 
         return CompressResult.builder().compressed(true).summary(summary).build();
+    }
+
+    private int chooseMidEndForLowWatermark(List<Message> conversationHistory,
+                                            int midStart,
+                                            int protectedTailStart,
+                                            CompressionPolicy policy) {
+        int maxMidEnd = Math.max(midStart, protectedTailStart);
+        if (maxMidEnd <= midStart) {
+            return maxMidEnd;
+        }
+        int targetTokens = (int) Math.max(1, policy.getMaxContextTokens() * policy.getLowWatermark());
+        int midEnd = midStart + 1;
+        while (midEnd < maxMidEnd && estimateRetainedTokens(conversationHistory, midStart, midEnd) > targetTokens) {
+            midEnd++;
+        }
+        return midEnd;
+    }
+
+    private int estimateRetainedTokens(List<Message> conversationHistory, int midStart, int midEnd) {
+        int tokens = 0;
+        for (int i = 0; i < conversationHistory.size(); i++) {
+            if (i >= midStart && i < midEnd) {
+                continue;
+            }
+            tokens += estimateTokens(conversationHistory.get(i).getContent());
+        }
+        return tokens;
+    }
+
+    private int estimateTokens(String content) {
+        if (content == null || content.isEmpty()) {
+            return 0;
+        }
+        int tokens = 0;
+        for (char c : content.toCharArray()) {
+            tokens += (c > 0x2E7F) ? 6 : 2;
+        }
+        return tokens / 10;
+    }
+
+    private int adjustStartBoundary(List<Message> conversationHistory, int midStart, int midEnd) {
+        while (midStart < midEnd && conversationHistory.get(midStart).getRole() == MessageRole.TOOL) {
+            midStart++;
+        }
+        return midStart;
+    }
+
+    private int adjustEndBoundary(List<Message> conversationHistory, int midStart, int midEnd) {
+        while (midEnd > midStart) {
+            Message lastMid = conversationHistory.get(midEnd - 1);
+            if (hasToolCalls(lastMid)) {
+                midEnd--;
+                continue;
+            }
+            if (midEnd < conversationHistory.size() && conversationHistory.get(midEnd).getRole() == MessageRole.TOOL) {
+                int assistantIdx = findToolCallAssistantBefore(conversationHistory, midEnd);
+                if (assistantIdx >= midStart) {
+                    midEnd = assistantIdx;
+                    continue;
+                }
+            }
+            break;
+        }
+        return midEnd;
+    }
+
+    private int findToolCallAssistantBefore(List<Message> conversationHistory, int toolIndex) {
+        int i = toolIndex - 1;
+        while (i >= 0 && conversationHistory.get(i).getRole() == MessageRole.TOOL) {
+            i--;
+        }
+        return i >= 0 && hasToolCalls(conversationHistory.get(i)) ? i : -1;
+    }
+
+    private boolean hasToolCalls(Message message) {
+        return message.getRole() == MessageRole.ASSISTANT
+                && message.getToolCalls() != null
+                && !message.getToolCalls().isEmpty();
     }
 
     private String buildCompressionPrompt(List<Message> messages) {

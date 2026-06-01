@@ -21,18 +21,20 @@ public class FileToolResultCache implements ToolResultCache {
     }
 
     @Override
-    public String store(ToolResultArtifact artifact) {
+    public Optional<String> store(ToolResultArtifact artifact) {
         File dir = new File(props.getBaseDir(), "tool_result");
         try {
-            if (!dir.exists()) {
-                dir.mkdirs();
+            if (!dir.exists() && !dir.mkdirs()) {
+                log.warn("Failed to create artifact directory {}", dir);
+                return Optional.empty();
             }
             File file = new File(dir, artifact.getArtifactId() + ".json");
             objectMapper.writeValue(file, artifact);
+            return Optional.of(URI_SCHEME + artifact.getArtifactId());
         } catch (Exception e) {
             log.warn("Failed to write artifact {} to disk", artifact.getArtifactId(), e);
+            return Optional.empty();
         }
-        return URI_SCHEME + artifact.getArtifactId();
     }
 
     @Override

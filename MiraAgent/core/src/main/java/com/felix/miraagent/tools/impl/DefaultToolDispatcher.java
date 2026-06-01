@@ -57,7 +57,7 @@ public class DefaultToolDispatcher implements ToolDispatcher {
 
         try {
             JsonNode arguments = parseArguments(call.getArguments());
-            return handlerOpt.get().execute(call.getId(), arguments);
+            return handlerOpt.get().execute(call.getId(), arguments, context);
         } catch (Exception e) {
             log.warn("Tool execution failed tool={} callId={}", call.getName(), call.getId(), e);
             return ToolExecutionResult.error(call.getId(), call.getName(), e.getMessage());

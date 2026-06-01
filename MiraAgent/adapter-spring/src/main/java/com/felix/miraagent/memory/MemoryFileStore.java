@@ -46,15 +46,29 @@ public class MemoryFileStore implements MemoryStore {
     }
 
     @Override
-    public void archive(String userId, String memoryId) {
+    public MemoryWriteResult archive(String userId, String memoryId) {
         Path userDir = baseDir.resolve(userId);
         if (!Files.exists(userDir)) {
-            return;
+            return MemoryWriteResult.builder()
+                    .memoryId(memoryId)
+                    .success(false)
+                    .error("Memory directory does not exist")
+                    .build();
         }
         try {
-            archiveInDirectory(userDir, memoryId);
+            Path archivedPath = archiveInDirectory(userDir, memoryId);
+            return MemoryWriteResult.builder()
+                    .memoryId(memoryId)
+                    .filePath(archivedPath != null ? baseDir.relativize(archivedPath).toString() : null)
+                    .success(archivedPath != null)
+                    .error(archivedPath == null ? "Memory id not found" : null)
+                    .build();
         } catch (IOException e) {
-            throw new RuntimeException("Failed to archive memory " + memoryId, e);
+            return MemoryWriteResult.builder()
+                    .memoryId(memoryId)
+                    .success(false)
+                    .error(e.getMessage())
+                    .build();
         }
     }
 
@@ -97,45 +111,51 @@ public class MemoryFileStore implements MemoryStore {
         return sb.toString();
     }
 
-    private void archiveInDirectory(Path dir, String memoryId) throws IOException {
+    private Path archiveInDirectory(Path dir, String memoryId) throws IOException {
         if (!Files.isDirectory(dir)) {
-            return;
+            return null;
         }
         try (var stream = Files.list(dir)) {
             for (Path entry : stream.toList()) {
+                Path archivedPath = null;
                 if (Files.isDirectory(entry)) {
-                    archiveInDirectory(entry, memoryId);
+                    archivedPath = archiveInDirectory(entry, memoryId);
                 } else if (entry.getFileName().toString().endsWith(".md")) {
-                    archiveInFile(entry, memoryId);
+                    archivedPath = archiveInFile(entry, memoryId);
+                }
+                if (archivedPath != null) {
+                    return archivedPath;
                 }
             }
         }
+        return null;
     }
 
-    private void archiveInFile(Path filePath, String memoryId) throws IOException {
+    private Path archiveInFile(Path filePath, String memoryId) throws IOException {
         String content = Files.readString(filePath, StandardCharsets.UTF_8);
         String marker = "<!-- memory-id: " + memoryId;
         int markerIndex = content.indexOf(marker);
         if (markerIndex < 0) {
-            return;
+            return null;
         }
         int lineEnd = content.indexOf('\n', markerIndex);
         if (lineEnd < 0) {
-            return;
+            return null;
         }
         String afterCommentLine = content.substring(lineEnd + 1);
         if (afterCommentLine.startsWith("<!-- archived -->")) {
-            return;
+            return filePath;
         }
 
         List<String> lines = new ArrayList<>(List.of(content.split("\n", -1)));
         int commentLineIndex = findLineIndex(lines, marker);
         if (commentLineIndex < 0 || commentLineIndex + 1 > lines.size()) {
-            return;
+            return null;
         }
         lines.add(commentLineIndex + 1, "<!-- archived -->");
         Files.writeString(filePath, String.join("\n", lines), StandardCharsets.UTF_8,
                 StandardOpenOption.TRUNCATE_EXISTING);
+        return filePath;
     }
 
     private int findLineIndex(List<String> lines, String prefix) {

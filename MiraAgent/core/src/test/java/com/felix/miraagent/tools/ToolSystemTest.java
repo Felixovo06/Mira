@@ -1,7 +1,10 @@
 package com.felix.miraagent.tools;
 
+import com.felix.miraagent.memory.MemoryRetrieveRequest;
+import com.felix.miraagent.memory.MemoryRetrieveResult;
 import com.felix.miraagent.model.ToolCall;
 import com.felix.miraagent.tools.builtin.BuiltinTools;
+import com.felix.miraagent.tools.handlers.RecallMemoryToolHandler;
 import com.felix.miraagent.tools.impl.DefaultToolDispatcher;
 import com.felix.miraagent.tools.impl.DefaultToolPermissionPolicy;
 import com.felix.miraagent.tools.impl.InMemoryToolRegistry;
@@ -10,6 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -109,5 +113,21 @@ class ToolSystemTest {
         assertEquals("tc2", results.get(1).getToolCallId());
         assertEquals("tc3", results.get(2).getToolCallId());
         assertTrue(results.stream().allMatch(r -> r.getStatus() == ToolStatus.SUCCESS));
+    }
+
+    @Test
+    void recallMemoryUsesDispatchUserContext() {
+        AtomicReference<MemoryRetrieveRequest> captured = new AtomicReference<>();
+        registry.register(RecallMemoryToolHandler.definition(), new RecallMemoryToolHandler(request -> {
+            captured.set(request);
+            return MemoryRetrieveResult.builder().hits(List.of()).queryUsed(request.getQuery()).build();
+        }));
+
+        var call = ToolCall.builder().id("tc6").name("recall_memory").arguments("{\"query\":\"tea\"}").build();
+        var result = dispatcher.dispatchOne(call, context);
+
+        assertEquals(ToolStatus.SUCCESS, result.getStatus());
+        assertEquals("user-1", captured.get().getUserId());
+        assertEquals("tea", captured.get().getQuery());
     }
 }

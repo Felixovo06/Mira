@@ -1,6 +1,6 @@
 package com.felix.miraagent.agent.compression;
 
-import com.felix.miraagent.memory.MemoryStore;
+import com.felix.miraagent.memory.SerializedMemoryWriter;
 import com.felix.miraagent.model.Message;
 import com.felix.miraagent.model.ModelClient;
 
@@ -17,6 +17,6 @@ public interface ContextCompressor {
             String characterId,
             CompressionPolicy policy,
             ModelClient modelClient,
-            MemoryStore memoryStore
+            SerializedMemoryWriter memoryWriter
     );
 }

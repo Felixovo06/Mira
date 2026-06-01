@@ -4,6 +4,7 @@ import com.felix.miraagent.agent.*;
 import com.felix.miraagent.agent.compression.*;
 import com.felix.miraagent.memory.MemoryRetriever;
 import com.felix.miraagent.memory.MemoryStore;
+import com.felix.miraagent.memory.SerializedMemoryWriter;
 import com.felix.miraagent.model.*;
 import com.felix.miraagent.prompt.PromptBuildRequest;
 import com.felix.miraagent.prompt.PromptBuildResult;
@@ -24,12 +25,21 @@ import com.felix.miraagent.trace.TraceStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class ConversationLoop {
 
     private static final Logger log = LoggerFactory.getLogger(ConversationLoop.class);
+    private static final Pattern CONTEXT_SUMMARY_PATTERN =
+            Pattern.compile("^\\[Context Summary checkpoint=([^\\s]+) first=([^\\s]+) last=([^\\]]+)]", Pattern.MULTILINE);
 
     private final ModelClient modelClient;
     private final PromptBuilder promptBuilder;
@@ -40,9 +50,11 @@ public class ConversationLoop {
     private final ToolExecutionStore toolExecutionStore;
     private final MemoryStore memoryStore;
     private final MemoryRetriever memoryRetriever;
+    private final SerializedMemoryWriter memoryWriter;
     private final ToolResultCache toolResultCache;
     private final ContextCompressor compressor;
     private final CompressionPolicy compressionPolicy;
+    private final String summaryBaseDir;
 
     public ConversationLoop(ModelClient modelClient, PromptBuilder promptBuilder,
                             ToolRegistry toolRegistry, ToolDispatcher toolDispatcher,
@@ -68,7 +80,7 @@ public class ConversationLoop {
                             MemoryStore memoryStore, MemoryRetriever memoryRetriever,
                             ToolResultCache toolResultCache) {
         this(modelClient, promptBuilder, toolRegistry, toolDispatcher, sessionStore, traceStore,
-                toolExecutionStore, memoryStore, memoryRetriever, toolResultCache, null, null);
+                toolExecutionStore, memoryStore, memoryRetriever, null, toolResultCache, null, null);
     }
 
     public ConversationLoop(ModelClient modelClient, PromptBuilder promptBuilder,
@@ -78,6 +90,31 @@ public class ConversationLoop {
                             MemoryStore memoryStore, MemoryRetriever memoryRetriever,
                             ToolResultCache toolResultCache,
                             ContextCompressor compressor, CompressionPolicy compressionPolicy) {
+        this(modelClient, promptBuilder, toolRegistry, toolDispatcher, sessionStore, traceStore,
+                toolExecutionStore, memoryStore, memoryRetriever, null, toolResultCache, compressor, compressionPolicy);
+    }
+
+    public ConversationLoop(ModelClient modelClient, PromptBuilder promptBuilder,
+                            ToolRegistry toolRegistry, ToolDispatcher toolDispatcher,
+                            SessionStore sessionStore, TraceStore traceStore,
+                            ToolExecutionStore toolExecutionStore,
+                            MemoryStore memoryStore, MemoryRetriever memoryRetriever,
+                            SerializedMemoryWriter memoryWriter,
+                            ToolResultCache toolResultCache,
+                            ContextCompressor compressor, CompressionPolicy compressionPolicy) {
+        this(modelClient, promptBuilder, toolRegistry, toolDispatcher, sessionStore, traceStore,
+                toolExecutionStore, memoryStore, memoryRetriever, memoryWriter, toolResultCache, compressor, compressionPolicy, null);
+    }
+
+    public ConversationLoop(ModelClient modelClient, PromptBuilder promptBuilder,
+                            ToolRegistry toolRegistry, ToolDispatcher toolDispatcher,
+                            SessionStore sessionStore, TraceStore traceStore,
+                            ToolExecutionStore toolExecutionStore,
+                            MemoryStore memoryStore, MemoryRetriever memoryRetriever,
+                            SerializedMemoryWriter memoryWriter,
+                            ToolResultCache toolResultCache,
+                            ContextCompressor compressor, CompressionPolicy compressionPolicy,
+                            String summaryBaseDir) {
         this.modelClient = modelClient;
         this.promptBuilder = promptBuilder;
         this.toolRegistry = toolRegistry;
@@ -87,9 +124,11 @@ public class ConversationLoop {
         this.toolExecutionStore = toolExecutionStore;
         this.memoryStore = memoryStore;
         this.memoryRetriever = memoryRetriever;
+        this.memoryWriter = memoryWriter;
         this.toolResultCache = toolResultCache;
         this.compressor = compressor;
         this.compressionPolicy = compressionPolicy;
+        this.summaryBaseDir = summaryBaseDir;
     }
 
     public RunResult run(AgentRunRequest request) {
@@ -100,6 +139,7 @@ public class ConversationLoop {
         emitTrace(request, runId, sessionId, 0, TraceEventType.RUN_STARTED, Map.of("userId", request.getUserId()));
 
         List<Message> conversationHistory = new ArrayList<>(request.getMessages());
+        conversationHistory = applyCompressionSummaries(conversationHistory);
         List<ToolExecutionResult> allToolResults = new ArrayList<>();
         int modelCallCount = 0;
         int toolCallCount = 0;
@@ -131,6 +171,7 @@ public class ConversationLoop {
 
             String userProfileSummary = "";
             String relationshipMemory = "";
+            String latestSummary = readLatestSummary(sessionId);
             if (memoryStore != null) {
                 userProfileSummary = truncate(memoryStore.readFile(request.getUserId(), "USER.md"), 500);
                 String charId = request.getCharacterProfile() != null ? request.getCharacterProfile().getId() : null;
@@ -139,14 +180,17 @@ public class ConversationLoop {
                 }
             }
 
-            var promptRequest = PromptBuildRequest.builder()
+            var promptRequestBuilder = PromptBuildRequest.builder()
                     .characterProfile(request.getCharacterProfile())
                     .userProfileSummary(userProfileSummary)
                     .relationshipMemory(relationshipMemory)
                     .sessionHistory(conversationHistory)
                     .toolDefinitions(toolRegistry.listAvailable(resolveCtx))
-                    .contextBudget(lastRealInputTokens)
-                    .build();
+                    .contextBudget(lastRealInputTokens);
+            if (!latestSummary.isBlank()) {
+                promptRequestBuilder.retrievedMemory("[Latest Context Summary]\n" + truncate(latestSummary, 1000));
+            }
+            PromptBuildRequest promptRequest = promptRequestBuilder.build();
 
             PromptBuildResult promptResult = promptBuilder.build(promptRequest);
             emitTrace(request, runId, sessionId, stepIndex++, TraceEventType.PROMPT_BUILT,
@@ -263,11 +307,13 @@ public class ConversationLoop {
                                 .sizeBytes(modelVisibleContent != null ? modelVisibleContent.getBytes().length : 0)
                                 .createdAt(Instant.now())
                                 .build();
-                        String uri = toolResultCache.store(artifact);
-                        String preview = modelVisibleContent != null && modelVisibleContent.length() > 200
-                                ? modelVisibleContent.substring(0, 200) + "..."
-                                : modelVisibleContent;
-                        modelVisibleContent = "[artifact: " + uri + "]\n" + preview;
+                        Optional<String> uri = toolResultCache.store(artifact);
+                        if (uri.isPresent()) {
+                            String preview = modelVisibleContent != null && modelVisibleContent.length() > 200
+                                    ? modelVisibleContent.substring(0, 200) + "..."
+                                    : modelVisibleContent;
+                            modelVisibleContent = "[artifact: " + uri.get() + "]\n" + preview;
+                        }
                     }
 
                     Message toolMsg = Message.builder()
@@ -297,9 +343,13 @@ public class ConversationLoop {
                 CompressResult cr = compressor.compress(
                         conversationHistory, sessionId, request.getUserId(),
                         request.getCharacterProfile() != null ? request.getCharacterProfile().getId() : null,
-                        compressionPolicy, modelClient, memoryStore
+                        compressionPolicy, modelClient, memoryWriter
                 );
                 if (cr.isCompressed()) {
+                    Message summaryMsg = findSummaryMessage(conversationHistory, cr.getSummary().getCheckpointId());
+                    if (summaryMsg != null) {
+                        sessionStore.appendMessage(sessionId, summaryMsg);
+                    }
                     emitTrace(request, runId, sessionId, stepIndex++, TraceEventType.CONTEXT_COMPRESSED,
                             Map.of("checkpointId", cr.getSummary().getCheckpointId(),
                                     "memoryWrites", cr.getSummary().getMemoryWrites().size()));
@@ -400,10 +450,92 @@ public class ConversationLoop {
         return handle.await();
     }
 
+    private List<Message> applyCompressionSummaries(List<Message> history) {
+        for (int i = history.size() - 1; i >= 0; i--) {
+            Message summary = history.get(i);
+            SummaryMarker marker = parseSummaryMarker(summary);
+            if (marker == null) {
+                continue;
+            }
+            int firstIdx = indexOfMessage(history, marker.firstMessageId());
+            int lastIdx = indexOfMessage(history, marker.lastMessageId());
+            if (firstIdx < 0 || lastIdx < firstIdx || lastIdx >= i) {
+                continue;
+            }
+            List<Message> collapsed = new ArrayList<>();
+            collapsed.addAll(history.subList(0, firstIdx));
+            collapsed.add(summary);
+            for (int j = lastIdx + 1; j < history.size(); j++) {
+                if (j != i) {
+                    collapsed.add(history.get(j));
+                }
+            }
+            return collapsed;
+        }
+        return history;
+    }
+
+    private Message findSummaryMessage(List<Message> history, String checkpointId) {
+        for (Message message : history) {
+            SummaryMarker marker = parseSummaryMarker(message);
+            if (marker != null && marker.checkpointId().equals(checkpointId)) {
+                return message;
+            }
+        }
+        return null;
+    }
+
+    private String readLatestSummary(String sessionId) {
+        if (summaryBaseDir == null || summaryBaseDir.isBlank() || sessionId == null || sessionId.isBlank()) {
+            return "";
+        }
+        Path dir = Paths.get(summaryBaseDir, sessionId);
+        if (!Files.isDirectory(dir)) {
+            return "";
+        }
+        try (var stream = Files.list(dir)) {
+            Optional<Path> latest = stream
+                    .filter(path -> path.getFileName().toString().endsWith(".md"))
+                    .max(Comparator.comparingLong(path -> {
+                        try {
+                            return Files.getLastModifiedTime(path).toMillis();
+                        } catch (IOException e) {
+                            return 0L;
+                        }
+                    }));
+            return latest.isPresent() ? Files.readString(latest.get(), StandardCharsets.UTF_8) : "";
+        } catch (IOException e) {
+            log.warn("Failed to read latest summary for session {}", sessionId, e);
+            return "";
+        }
+    }
+
+    private SummaryMarker parseSummaryMarker(Message message) {
+        if (message == null || message.getContent() == null) {
+            return null;
+        }
+        Matcher matcher = CONTEXT_SUMMARY_PATTERN.matcher(message.getContent());
+        if (!matcher.find()) {
+            return null;
+        }
+        return new SummaryMarker(matcher.group(1), matcher.group(2), matcher.group(3));
+    }
+
+    private int indexOfMessage(List<Message> history, String messageId) {
+        for (int i = 0; i < history.size(); i++) {
+            if (Objects.equals(history.get(i).getId(), messageId)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     private String truncate(String text, int maxChars) {
         if (text == null || text.length() <= maxChars) return text != null ? text : "";
         return text.substring(0, maxChars);
     }
+
+    private record SummaryMarker(String checkpointId, String firstMessageId, String lastMessageId) {}
 
     private static class RunInterruptedException extends RuntimeException {
     }

@@ -7,6 +7,7 @@ import com.felix.miraagent.memory.MemoryWriteRequest;
 import com.felix.miraagent.memory.MemoryWriteResult;
 import com.felix.miraagent.memory.SerializedMemoryWriter;
 import com.felix.miraagent.tools.ToolDefinition;
+import com.felix.miraagent.tools.ToolDispatchContext;
 import com.felix.miraagent.tools.ToolExecutionResult;
 import com.felix.miraagent.tools.ToolHandler;
 import com.felix.miraagent.tools.ToolRiskLevel;
@@ -30,22 +31,25 @@ public class MemoryWriterToolHandler implements ToolHandler {
                 .inputSchema(Map.of(
                         "type", "object",
                         "properties", Map.of(
-                                "type", Map.of("type", "string",
-                                        "enum", List.of("PROFILE", "PREFERENCE", "EVENT", "GOAL", "RELATIONSHIP"),
-                                        "description", "Memory category"),
-                                "content", Map.of("type", "string",
-                                        "description", "The memory content to store"),
-                                "user_id", Map.of("type", "string",
-                                        "description", "User ID (required)"),
-                                "character_id", Map.of("type", "string",
-                                        "description", "Optional character context")),
-                        "required", new String[]{"type", "content", "user_id"}))
+	                                "type", Map.of("type", "string",
+	                                        "enum", List.of("PROFILE", "PREFERENCE", "EVENT", "GOAL", "RELATIONSHIP"),
+	                                        "description", "Memory category"),
+	                                "content", Map.of("type", "string",
+	                                        "description", "The memory content to store"),
+	                                "character_id", Map.of("type", "string",
+	                                        "description", "Optional character context")),
+	                        "required", new String[]{"type", "content"}))
                 .riskLevel(ToolRiskLevel.LOW)
                 .build();
     }
 
     @Override
     public ToolExecutionResult execute(String toolCallId, JsonNode arguments) {
+        return execute(toolCallId, arguments, null);
+    }
+
+    @Override
+    public ToolExecutionResult execute(String toolCallId, JsonNode arguments, ToolDispatchContext context) {
         try {
             String content = arguments.path("content").asText("").trim();
             if (content.isBlank()) {
@@ -60,7 +64,10 @@ public class MemoryWriterToolHandler implements ToolHandler {
                 return ToolExecutionResult.error(toolCallId, "write_memory", "Invalid memory type: " + typeStr);
             }
 
-            String userId = arguments.path("user_id").asText("");
+            String userId = context != null ? context.getUserId() : arguments.path("user_id").asText("");
+            if (userId == null || userId.isBlank()) {
+                return ToolExecutionResult.error(toolCallId, "write_memory", "Missing user context");
+            }
             String characterId = arguments.has("character_id") ? arguments.path("character_id").asText(null) : null;
 
             MemoryWriteRequest request = MemoryWriteRequest.builder()
@@ -70,6 +77,7 @@ public class MemoryWriterToolHandler implements ToolHandler {
                     .scope(MemoryScope.GLOBAL)
                     .category(category)
                     .content(content)
+                    .sourceSessionId(context != null ? context.getSessionId() : null)
                     .build();
 
             MemoryWriteResult result = writer.submit(request);
