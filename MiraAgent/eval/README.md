@@ -12,7 +12,8 @@
 | L3 质量级 | LLM-as-Judge：相关性/角色一致/记忆使用（3× 取中位数 + Kappa 校验） | 中 | 计划中 |
 | L4 回归级 | golden set + baseline diff，精确到"哪条 case 变了多少" | — | 计划中 |
 
-当前已落地 **L1（工具三项）+ L2**，对真实 Agent 出报告。
+当前已落地 **L1（工具三项）+ L2 + L3（Judge）+ L4（baseline diff）**，对真实 Agent 出报告。
+（L1 记忆 P·R / MCP 成功率仍为后续。）
 
 ## 跑法
 
@@ -26,6 +27,25 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21 ./mvnw -q -pl eval -am compile \
 
 输出：控制台 summary + `eval-report.json`（每条 case 明细 + 各层汇总）。
 用例集在 `src/main/resources/eval/cases.json`（`-Deval.cases=` 可换）。
+
+### 开 L3（LLM-as-Judge，可选）
+
+判官走独立的 OpenAI 兼容端点，**不配凭据则自动跳过**（保持 eval 与主链路解耦，判官也不复用被测模型客户端）：
+
+```bash
+-Deval.judge.baseUrl=https://api.xiaomimimo.com/v1 \
+-Deval.judge.apiKey=$KEY -Deval.judge.model=mimo-v2.5 -Deval.judge.samples=3
+```
+
+### 开 L4（回归对比，可选）
+
+```bash
+-Deval.baseline=上次的eval-report.json -Deval.tolerance=0.05
+```
+
+报告里多出 `diff`：超容差的指标分到 `regressions`/`improvements`（延迟/token 越低越好，其余越高越好）。
+
+> CI 建议：L1 工具准确率/L3/L4 因依赖真实模型→**按需/每日**跑；`EvalLogicTest`（diff/median 纯逻辑）可进每次 push。
 
 ## 指标定义（关键设计取舍）
 

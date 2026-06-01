@@ -1,9 +1,11 @@
 package com.felix.miraagent.eval;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.felix.miraagent.eval.model.EvalCase;
+import com.felix.miraagent.eval.model.JudgeScores;
 import com.felix.miraagent.eval.model.RunOutcome;
 
 import java.io.InputStream;
@@ -36,11 +38,18 @@ public class EvalRunner {
 
     public void run(String baseUrl, String casesRes, String out) throws Exception {
         List<EvalCase> cases = loadCases(casesRes);
-        System.out.printf("▶ 评测 %d 条用例 → %s%n", cases.size(), baseUrl);
         AgentEvalClient client = new AgentEvalClient(baseUrl);
+        LlmJudge judge = LlmJudge.fromConfig();
+        System.out.printf("▶ 评测 %d 条用例 → %s (Judge L3: %s)%n",
+                cases.size(), baseUrl, judge.enabled() ? "on" : "off");
 
         ArrayNode caseReports = mapper.createArrayNode();
         List<RunOutcome> outcomes = new ArrayList<>();
+        // Layer3 各维度分数累加
+        List<Integer> jRelevance = new ArrayList<>();
+        List<Integer> jPersona = new ArrayList<>();
+        List<Integer> jToolUse = new ArrayList<>();
+        List<Integer> jOverall = new ArrayList<>();
         // 计数器
         int toolSelTotal = 0, toolSelHit = 0;
         int paramTotal = 0, paramHit = 0;
@@ -105,6 +114,15 @@ public class EvalRunner {
             cr.put("ttftMs", o.ttftMs());
             cr.put("totalMs", o.totalMs());
             cr.put("tokens", o.inputTokens() + o.outputTokens());
+            // Layer3: LLM-as-Judge（启用且本轮成功时）
+            JudgeScores js = judge.score(c, o);
+            if (js != null) {
+                ObjectNode jn = cr.putObject("judge");
+                putIf(jn, "relevance", js.relevance(), jRelevance);
+                putIf(jn, "persona_consistency", js.personaConsistency(), jPersona);
+                putIf(jn, "tool_usage", js.toolUsage(), jToolUse);
+                putIf(jn, "overall", js.overall(), jOverall);
+            }
             caseReports.add(cr);
             System.out.printf("  %-16s %-12s %s%s%n", c.id(), c.category(),
                     o.ok() ? "OK" : "FAIL", o.error() != null ? " (" + o.error() + ")" : "");
@@ -125,12 +143,30 @@ public class EvalRunner {
         l2.put("latency_ms_avg", avg(latencies));
         l2.put("latency_ms_p95", p95(latencies));
         l2.put("avg_tokens_per_turn", avg(tokensPerTurn.stream().map(Long::valueOf).toList()));
+        // Layer 3（仅在 Judge 启用且有评分时输出）
+        if (judge.enabled() && !jOverall.isEmpty()) {
+            ObjectNode l3 = summary.putObject("layer3_quality");
+            l3.put("relevance_avg", avgInt(jRelevance));
+            l3.put("persona_consistency_avg", avgInt(jPersona));
+            l3.put("tool_usage_avg", avgInt(jToolUse));
+            l3.put("overall_avg", avgInt(jOverall));
+            l3.put("judged_cases", jOverall.size());
+        }
         summary.put("fact_assertion_pass_rate", ratio(assertHit, assertTotal));
         summary.put("total_cases", cases.size());
 
         ObjectNode report = mapper.createObjectNode();
         report.put("baseUrl", baseUrl);
         report.set("summary", summary);
+
+        // Layer 4：与 baseline 对比（-Deval.baseline=旧报告路径，-Deval.tolerance=容差，默认 0.05）
+        String baselinePath = System.getProperty("eval.baseline");
+        if (baselinePath != null && Files.exists(Path.of(baselinePath))) {
+            double tol = Double.parseDouble(System.getProperty("eval.tolerance", "0.05"));
+            JsonNode baseSummary = mapper.readTree(Files.readString(Path.of(baselinePath))).path("summary");
+            ObjectNode diff = ReportDiff.diff(mapper, baseSummary, summary, tol);
+            report.set("diff", diff);
+        }
         report.set("cases", caseReports);
 
         String json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(report);
@@ -138,7 +174,23 @@ public class EvalRunner {
 
         System.out.println("\n===== 评测报告 summary =====");
         System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(summary));
+        if (report.has("diff")) {
+            System.out.println("\n----- 与 baseline 对比 -----");
+            System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(report.get("diff")));
+        }
         System.out.println("报告已写入: " + Path.of(out).toAbsolutePath());
+    }
+
+    private void putIf(ObjectNode node, String field, Integer v, List<Integer> acc) {
+        if (v != null) {
+            node.put(field, v);
+            acc.add(v);
+        }
+    }
+
+    private Double avgInt(List<Integer> xs) {
+        if (xs.isEmpty()) return null;
+        return Math.round(xs.stream().mapToInt(Integer::intValue).average().orElse(0) * 100) / 100.0;
     }
 
     private boolean paramsMatch(RunOutcome o, String tool, java.util.Map<String, String> expected) {
