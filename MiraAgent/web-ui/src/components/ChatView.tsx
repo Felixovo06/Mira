@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import type { Message, StreamEvent, TraceEvent } from '../types'
-import { getMessages, interrupt, streamChat } from '../api'
+import type { CharacterCard, Message, StreamEvent, ToolInfo, TraceEvent } from '../types'
+import { getCharacters, getMessages, getSessionTrace, getTools, interrupt, streamChat } from '../api'
 import { registerSession } from '../sessionStore'
 import MessageBubble from './MessageBubble'
 import ToolChip from './ToolChip'
@@ -20,10 +20,31 @@ export default function ChatView({ sessionId, userId }: Props) {
   const [traces, setTraces] = useState<TraceEvent[]>([])
   const [traceOpen, setTraceOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [tools, setTools] = useState<ToolInfo[]>([])
+  const [enabled, setEnabled] = useState<Set<string>>(new Set())
+  const [toolsOpen, setToolsOpen] = useState(false)
+  const [characters, setCharacters] = useState<CharacterCard[]>([])
+  const [characterId, setCharacterId] = useState<string>('mira')
   const runIdRef = useRef<string | null>(null)
   const abortRef = useRef<null | (() => void)>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const accRef = useRef('')
+
+  // 加载工具与角色（一次）。默认启用 LOW/MEDIUM 工具，HIGH/CRITICAL 默认关闭（与权限门控一致）。
+  useEffect(() => {
+    getTools()
+      .then((t) => {
+        setTools(t)
+        setEnabled(new Set(t.filter((x) => x.riskLevel === 'LOW' || x.riskLevel === 'MEDIUM').map((x) => x.name)))
+      })
+      .catch(() => {})
+    getCharacters()
+      .then((cs) => {
+        setCharacters(cs)
+        if (cs.length && !cs.some((c) => c.id === 'mira')) setCharacterId(cs[0].id)
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     setError(null)
@@ -32,12 +53,25 @@ export default function ChatView({ sessionId, userId }: Props) {
     getMessages(sessionId)
       .then((m) => setMessages(m.filter((x) => x.role !== 'system')))
       .catch(() => setMessages([]))
+    // 历史会话回看：回填该会话的 trace
+    getSessionTrace(sessionId)
+      .then((t) => setTraces(t))
+      .catch(() => {})
   }, [sessionId])
 
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [messages, assistant])
+
+  function toggleTool(name: string) {
+    setEnabled((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
 
   function finalize(text: string) {
     if (text.trim()) {
@@ -70,7 +104,7 @@ export default function ChatView({ sessionId, userId }: Props) {
     accRef.current = ''
 
     abortRef.current = streamChat(
-      { userId, sessionId, content, enabledTools: ['note', 'todo'] },
+      { userId, sessionId, characterId, content, enabledTools: Array.from(enabled) },
       (ev: StreamEvent) => {
         if (ev.type === 'start') {
           runIdRef.current = ev.runId
@@ -129,33 +163,68 @@ export default function ChatView({ sessionId, userId }: Props) {
   }
 
   const empty = messages.length === 0 && !streaming
+  const riskClass = (r: string) => (r === 'HIGH' || r === 'CRITICAL' ? 'risk-high' : r === 'MEDIUM' ? 'risk-med' : 'risk-low')
 
   return (
     <div className="chat glass">
       <header className="chat-head">
         <div className="chat-head-l">
           <span className="chat-title">对话</span>
+          {characters.length > 0 && (
+            <select
+              className="char-select"
+              value={characterId}
+              onChange={(e) => setCharacterId(e.target.value)}
+              disabled={streaming}
+              title="选择角色"
+            >
+              {characters.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
           <span className="chat-sid mono">{sessionId}</span>
         </div>
-        <button
-          className={`btn btn-ghost trace-btn ${traceOpen ? 'on' : ''}`}
-          onClick={() => setTraceOpen((v) => !v)}
-        >
-          <span className="dot" style={{ background: traces.length ? 'var(--accent)' : 'var(--text-faint)', boxShadow: 'none' }} />
-          Trace
-          {traces.length > 0 && <span className="trace-count">{traces.length}</span>}
-        </button>
+        <div className="chat-head-r">
+          <button className={`btn btn-ghost tools-btn ${toolsOpen ? 'on' : ''}`} onClick={() => setToolsOpen((v) => !v)}>
+            工具 <span className="trace-count">{enabled.size}</span>
+          </button>
+          <button
+            className={`btn btn-ghost trace-btn ${traceOpen ? 'on' : ''}`}
+            onClick={() => setTraceOpen((v) => !v)}
+          >
+            <span className="dot" style={{ background: traces.length ? 'var(--accent)' : 'var(--text-faint)', boxShadow: 'none' }} />
+            Trace
+            {traces.length > 0 && <span className="trace-count">{traces.length}</span>}
+          </button>
+        </div>
       </header>
+
+      {toolsOpen && (
+        <div className="tools-bar">
+          {tools.length === 0 && <span className="tools-empty">无可用工具</span>}
+          {tools.map((t) => (
+            <button
+              key={t.name}
+              className={`tool-toggle ${enabled.has(t.name) ? 'active' : ''} ${riskClass(t.riskLevel)}`}
+              onClick={() => toggleTool(t.name)}
+              title={`${t.description}\n风险: ${t.riskLevel}`}
+            >
+              {t.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="chat-scroll" ref={scrollRef}>
         {empty ? (
           <div className="chat-empty">
             <div className="empty-orb" />
             <h2>开始一段对话</h2>
-            <p>这是有状态、可调用工具的陪伴型 Agent。试着让它帮你记一条 todo。</p>
+            <p>这是有状态、可调用工具的陪伴型 Agent。试着让它帮你记一条 todo 或算一道题。</p>
             <div className="empty-hints">
               <span className="pill">记一条待办：明天读论文</span>
-              <span className="pill">你还记得我说过什么吗</span>
+              <span className="pill">帮我算 (3+4)*2</span>
             </div>
           </div>
         ) : (

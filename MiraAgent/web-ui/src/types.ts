@@ -112,3 +112,30 @@ export interface CuratorReport {
   narrow: SkillSuggestion[]
   similar: ConsolidationProposal[]
 }
+
+export interface ToolInfo {
+  name: string
+  description: string
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+  enabledByDefault: boolean
+}
+
+export interface CharacterCard {
+  id: string
+  name: string
+  description?: string
+  firstMessage?: string
+  tags?: string[]
+}
+
+export interface MemoryItem {
+  id: string
+  userId: string
+  characterId?: string
+  category: string
+  contentPreview: string
+  confidence: number
+  sourceUri?: string
+  createdAt?: string
+  updatedAt?: string
+}

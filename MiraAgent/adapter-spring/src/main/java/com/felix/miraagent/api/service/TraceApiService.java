@@ -18,4 +18,8 @@ public class TraceApiService {
     public List<TraceEvent> getTrace(String runId) {
         return traceStore.findByRunId(runId);
     }
+
+    public List<TraceEvent> getSessionTrace(String sessionId) {
+        return traceStore.findBySessionId(sessionId);
+    }
 }

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import './Sidebar.css'
 
-export type View = 'chat' | 'history' | 'skills' | 'wechat'
+export type View = 'chat' | 'history' | 'memory' | 'skills' | 'wechat'
 
 interface Props {
   view: View
@@ -27,6 +27,16 @@ const NAV: { id: View; label: string; icon: ReactNode }[] = [
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
         <path d="M3 12a9 9 0 1 0 3-6.7M3 4v4h4" strokeLinecap="round" strokeLinejoin="round" />
         <path d="M12 8v4l3 2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    id: 'memory',
+    label: '记忆',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <path d="M12 3a4 4 0 0 0-4 4v1a3 3 0 0 0 0 6 4 4 0 0 0 8 0 3 3 0 0 0 0-6V7a4 4 0 0 0-4-4Z" strokeLinejoin="round" />
+        <path d="M12 3v18" strokeLinecap="round" />
       </svg>
     ),
   },

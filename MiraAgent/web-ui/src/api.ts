@@ -1,12 +1,15 @@
 import type {
+  CharacterCard,
   ChatResponse,
   CuratorReport,
+  MemoryItem,
   Message,
   SkillDetail,
   SkillIndex,
   StreamEvent,
   ToolCall,
   ToolExecution,
+  ToolInfo,
   TraceEvent,
 } from './types'
 
@@ -32,6 +35,7 @@ export function streamChat(
   payload: {
     userId: string
     sessionId: string
+    characterId?: string
     content: string
     enabledTools?: string[]
   },
@@ -149,6 +153,39 @@ export async function archiveSkill(skillId: string): Promise<void> {
 
 export async function getCuratorReport(): Promise<CuratorReport> {
   const res = await fetch(`${BASE}/skills/curator-report`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+// ---- 工具 / 角色 / 记忆 / 会话 trace ----
+
+export async function getTools(): Promise<ToolInfo[]> {
+  const res = await fetch(`${BASE}/tools`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function getCharacters(): Promise<CharacterCard[]> {
+  const res = await fetch(`${BASE}/characters`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function getMemories(userId: string): Promise<MemoryItem[]> {
+  const res = await fetch(`${BASE}/memory?userId=${encodeURIComponent(userId)}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function deleteMemory(memoryId: string, userId: string): Promise<void> {
+  const res = await fetch(`${BASE}/memory/${memoryId}?userId=${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+}
+
+export async function getSessionTrace(sessionId: string): Promise<TraceEvent[]> {
+  const res = await fetch(`${BASE}/traces/sessions/${sessionId}`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }

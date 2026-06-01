@@ -21,4 +21,10 @@ public class TraceController {
     public ResponseEntity<List<TraceEvent>> getTrace(@PathVariable String runId) {
         return ResponseEntity.ok(traceApiService.getTrace(runId));
     }
+
+    /** 按会话查 trace（供历史会话回看用，跨该会话所有 run）。 */
+    @GetMapping("/sessions/{sessionId}")
+    public ResponseEntity<List<TraceEvent>> getSessionTrace(@PathVariable String sessionId) {
+        return ResponseEntity.ok(traceApiService.getSessionTrace(sessionId));
+    }
 }
