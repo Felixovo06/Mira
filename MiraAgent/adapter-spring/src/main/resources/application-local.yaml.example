@@ -8,3 +8,7 @@ spring:
 mira:
   model:
     api-key: YOUR_API_KEY
+  weixin:
+    enabled: false          # 设为 true 开启微信接入
+    token: ${WEIXIN_BOT_TOKEN:}   # 已有 token 时跳过 QR 流程
+    base-url: https://ilinkai.weixin.qq.com
