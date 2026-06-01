@@ -1,9 +1,11 @@
 package com.felix.miraagent.persistence.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.felix.miraagent.persistence.jdbc.JdbcSessionSearchService;
 import com.felix.miraagent.persistence.jdbc.JdbcSessionStore;
 import com.felix.miraagent.persistence.jdbc.JdbcTraceStore;
 import com.felix.miraagent.persistence.jdbc.JdbcToolExecutionStore;
+import com.felix.miraagent.session.SessionSearchService;
 import com.felix.miraagent.session.SessionStore;
 import com.felix.miraagent.tools.ToolExecutionStore;
 import com.felix.miraagent.trace.TraceStore;
@@ -31,5 +33,11 @@ public class PersistenceConfig {
     @Bean
     public ToolExecutionStore toolExecutionStore(JdbcTemplate jdbcTemplate) {
         return new JdbcToolExecutionStore(jdbcTemplate);
+    }
+
+    @Bean
+    @ConditionalOnBean(DataSource.class)
+    public SessionSearchService sessionSearchService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+        return new JdbcSessionSearchService(jdbcTemplate, objectMapper);
     }
 }
