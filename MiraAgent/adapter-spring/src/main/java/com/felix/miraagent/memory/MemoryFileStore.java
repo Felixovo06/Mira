@@ -15,7 +15,19 @@ public class MemoryFileStore implements MemoryStore {
     private final Path baseDir;
 
     public MemoryFileStore(String baseDir) {
-        this.baseDir = Paths.get(baseDir);
+        this.baseDir = Paths.get(baseDir).toAbsolutePath().normalize();
+    }
+
+    /**
+     * 确保候选路径归一化后仍在 baseDir 内，否则拒绝。
+     * userId/characterId 来自客户端请求，可能含 {@code ../}——防止越界写读记忆目录外的文件。
+     */
+    private Path within(Path candidate) {
+        Path normalized = candidate.toAbsolutePath().normalize();
+        if (!normalized.startsWith(baseDir)) {
+            throw new IllegalArgumentException("memory path escapes base dir: " + candidate);
+        }
+        return normalized;
     }
 
     @Override
@@ -35,7 +47,7 @@ public class MemoryFileStore implements MemoryStore {
                     .filePath(relPath)
                     .success(true)
                     .build();
-        } catch (IOException e) {
+        } catch (IOException | IllegalArgumentException e) {
             return MemoryWriteResult.builder()
                     .memoryId(memoryId)
                     .filePath(null)
@@ -47,7 +59,13 @@ public class MemoryFileStore implements MemoryStore {
 
     @Override
     public MemoryWriteResult archive(String userId, String memoryId) {
-        Path userDir = baseDir.resolve(userId);
+        Path userDir;
+        try {
+            userDir = within(baseDir.resolve(userId));
+        } catch (IllegalArgumentException e) {
+            return MemoryWriteResult.builder()
+                    .memoryId(memoryId).success(false).error(e.getMessage()).build();
+        }
         if (!Files.exists(userDir)) {
             return MemoryWriteResult.builder()
                     .memoryId(memoryId)
@@ -74,7 +92,12 @@ public class MemoryFileStore implements MemoryStore {
 
     @Override
     public String readFile(String userId, String fileRelativePath) {
-        Path filePath = baseDir.resolve(userId).resolve(fileRelativePath);
+        Path filePath;
+        try {
+            filePath = within(baseDir.resolve(userId).resolve(fileRelativePath));
+        } catch (IllegalArgumentException e) {
+            return ""; // 越界路径按"无此记忆"处理，不抛穿透 loop
+        }
         if (!Files.exists(filePath)) {
             return "";
         }
@@ -89,15 +112,18 @@ public class MemoryFileStore implements MemoryStore {
         Path userDir = baseDir.resolve(request.getUserId());
         MemoryCategory category = request.getCategory();
 
+        Path target;
         if (category == MemoryCategory.RELATIONSHIP && request.getCharacterId() != null) {
-            return userDir.resolve("characters").resolve(request.getCharacterId()).resolve("RELATIONSHIP.md");
+            target = userDir.resolve("characters").resolve(request.getCharacterId()).resolve("RELATIONSHIP.md");
+        } else {
+            target = switch (category) {
+                case PROFILE -> userDir.resolve("USER.md");
+                case PREFERENCE -> userDir.resolve("PREFERENCES.md");
+                default -> userDir.resolve("MEMORY.md");
+            };
         }
-
-        return switch (category) {
-            case PROFILE -> userDir.resolve("USER.md");
-            case PREFERENCE -> userDir.resolve("PREFERENCES.md");
-            default -> userDir.resolve("MEMORY.md");
-        };
+        // userId/characterId 来自客户端，校验最终路径不越界
+        return within(target);
     }
 
     private String buildEntry(String memoryId, MemoryWriteRequest request) {

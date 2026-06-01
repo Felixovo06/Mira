@@ -247,6 +247,14 @@ public class SkillFileStore implements SkillStore {
     }
 
     private Path skillDir(String skillId) {
-        return baseDir.resolve(skillId);
+        if (skillId == null || skillId.isBlank()) {
+            throw new IllegalArgumentException("skillId is required");
+        }
+        // skillId 虽由内部 slug 生成，仍做防穿越兜底，确保不越出 baseDir
+        Path dir = baseDir.resolve(skillId).normalize();
+        if (!dir.startsWith(baseDir.normalize())) {
+            throw new IllegalArgumentException("invalid skillId: " + skillId);
+        }
+        return dir;
     }
 }
