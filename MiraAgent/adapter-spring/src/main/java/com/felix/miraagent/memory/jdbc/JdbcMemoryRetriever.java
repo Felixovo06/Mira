@@ -48,7 +48,7 @@ public class JdbcMemoryRetriever implements MemoryRetriever {
 
         if (request.getCharacterId() != null) {
             sql = """
-                    SELECT DISTINCT m.id, m.user_id, m.character_id, m.scope, m.category,
+                    SELECT m.id, m.user_id, m.character_id, m.scope, m.category,
                         m.content_preview, m.source_uri, m.confidence,
                         m.source_session_id, m.source_message_id,
                         m.retrieval_terms, m.embedding_ref, m.archived_at,
@@ -67,7 +67,7 @@ public class JdbcMemoryRetriever implements MemoryRetriever {
             params = new Object[]{q, q, userId, request.getCharacterId(), q, q, q, q, limit};
         } else {
             sql = """
-                    SELECT DISTINCT m.id, m.user_id, m.character_id, m.scope, m.category,
+                    SELECT m.id, m.user_id, m.character_id, m.scope, m.category,
                         m.content_preview, m.source_uri, m.confidence,
                         m.source_session_id, m.source_message_id,
                         m.retrieval_terms, m.embedding_ref, m.archived_at,
