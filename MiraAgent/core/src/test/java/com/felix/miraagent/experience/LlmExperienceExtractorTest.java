@@ -81,6 +81,16 @@ class LlmExperienceExtractorTest {
     }
 
     @Test
+    void usesLargeMaxTokensToAvoidSkillJsonTruncation() {
+        // 回归：含完整 skill 计划的提炼 JSON 较长，maxTokens 过小会被截断导致技能静默丢失。
+        var fake = new FakeModelClient().thenReply("{\"worth_saving\":false,\"memory_writes\":[],\"skill_writes\":[]}");
+        new LlmExperienceExtractor(fake, mapper).extract(req(ConfidenceSource.AGENT_INFERRED));
+        assertNotNull(fake.lastRequest);
+        assertTrue(fake.lastRequest.getMaxTokens() >= 4000,
+                "提炼调用应给足 token 预算，实际=" + fake.lastRequest.getMaxTokens());
+    }
+
+    @Test
     void emptyTranscriptShortCircuits() {
         var extractor = new LlmExperienceExtractor(new FakeModelClient(), mapper);
         var r = extractor.extract(ExperienceReviewRequest.builder().userId("u").sessionId("s").transcript("").build());

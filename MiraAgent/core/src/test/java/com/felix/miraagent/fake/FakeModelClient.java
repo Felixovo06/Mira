@@ -10,6 +10,9 @@ public class FakeModelClient implements ModelClient {
 
     private final Queue<ChatResponse> responseQueue = new LinkedList<>();
 
+    /** 最近一次收到的请求，供测试断言（如 maxTokens）。 */
+    public ChatRequest lastRequest;
+
     public FakeModelClient thenReply(String content) {
         responseQueue.add(ChatResponse.builder()
                 .assistantMessage(Message.builder()
@@ -69,6 +72,7 @@ public class FakeModelClient implements ModelClient {
 
     @Override
     public ChatResponse chat(ChatRequest request) {
+        this.lastRequest = request;
         if (responseQueue.isEmpty()) {
             throw new IllegalStateException("FakeModelClient has no more responses queued");
         }

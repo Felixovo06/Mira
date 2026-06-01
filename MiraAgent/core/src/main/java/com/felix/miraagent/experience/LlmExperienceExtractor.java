@@ -22,6 +22,12 @@ public class LlmExperienceExtractor implements ExperienceExtractor {
 
     private static final Logger log = LoggerFactory.getLogger(LlmExperienceExtractor.class);
 
+    /**
+     * 提炼输出 token 上限。需容纳含完整 skill 计划（steps/tool_suggestions/checklist）+ 多条
+     * memory_writes 的 JSON——实测 1500 会被截断（"Unexpected end-of-input"）导致技能静默丢失。
+     */
+    private static final int EXTRACTION_MAX_TOKENS = 4000;
+
     private final ModelClient modelClient;
     private final ObjectMapper objectMapper;
 
@@ -49,7 +55,7 @@ public class LlmExperienceExtractor implements ExperienceExtractor {
                 .message(Message.builder().id(UUID.randomUUID().toString())
                         .role(MessageRole.USER).content(prompt).build())
                 .temperature(0.1)
-                .maxTokens(1500)
+                .maxTokens(EXTRACTION_MAX_TOKENS)
                 .stream(false)
                 .build();
         try {
