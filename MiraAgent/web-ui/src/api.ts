@@ -13,6 +13,7 @@ import type {
   ToolInfo,
   TraceEvent,
   WeixinLoginState,
+  EvalReportEnvelope,
 } from './types'
 
 const BASE = '/api'
@@ -184,6 +185,22 @@ export async function getCharacters(): Promise<CharacterCard[]> {
   return res.json()
 }
 
+export async function getCharacter(id: string): Promise<CharacterCard> {
+  const res = await fetch(`${BASE}/characters/${encodeURIComponent(id)}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function importCharacter(card: CharacterCard): Promise<CharacterCard> {
+  const res = await fetch(`${BASE}/characters`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(card),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`)
+  return res.json()
+}
+
 export async function getMemories(userId: string): Promise<MemoryItem[]> {
   const res = await fetch(`${BASE}/memory?userId=${encodeURIComponent(userId)}`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -226,6 +243,20 @@ export async function deleteDocument(name: string): Promise<void> {
 
 export function documentDownloadUrl(name: string): string {
   return `${BASE}/documents/${encodeURIComponent(name)}`
+}
+
+// ---- 评测 Dashboard ----
+
+export async function runEval(): Promise<{ status: string }> {
+  const res = await fetch(`${BASE}/eval/run`, { method: 'POST' })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function getEvalReport(): Promise<EvalReportEnvelope> {
+  const res = await fetch(`${BASE}/eval/report`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
 }
 
 // ---- 微信扫码登录 ----

@@ -1,27 +1,54 @@
 import { useState } from 'react'
 import Sidebar, { type View } from './components/Sidebar'
 import ChatView from './components/ChatView'
-import SessionHistory from './components/SessionHistory'
+import CharacterSelect from './components/CharacterSelect'
 import MemoryView from './components/MemoryView'
 import DocumentsView from './components/DocumentsView'
 import SkillsView from './components/SkillsView'
+import CharactersView from './components/CharactersView'
+import EvalDashboard from './components/EvalDashboard'
 import WechatBinding from './components/WechatBinding'
-import { ensureUserId, getCurrentSessionId, newSessionId, setCurrentSessionId } from './sessionStore'
+import { ensureUserId, getCurrentSessionId, listSessions, newSessionId, setCurrentSessionId } from './sessionStore'
 import './App.css'
 
 export default function App() {
-  const [view, setView] = useState<View>('chat')
   const [userId] = useState<string>(ensureUserId)
-  const [sessionId, setSessionId] = useState<string>(() => getCurrentSessionId() ?? newSessionId())
+
+  const [sessionId, setSessionId] = useState<string>(() => {
+    const cur = getCurrentSessionId()
+    if (cur) return cur
+    const sessions = listSessions()
+    if (sessions.length > 0) return sessions[0].id
+    return newSessionId()
+  })
+
+  const [characterId, setCharacterId] = useState<string>(() => {
+    const sessions = listSessions()
+    return sessions[0]?.characterId ?? 'mira'
+  })
+
+  const [view, setView] = useState<View>(() => {
+    const cur = getCurrentSessionId()
+    const sessions = listSessions()
+    return (cur || sessions.length > 0) ? 'chat' : 'character-select'
+  })
 
   function startNewChat() {
-    setSessionId(newSessionId())
+    setView('character-select')
+  }
+
+  function onCharacterSelected(cid: string) {
+    const id = newSessionId()
+    setCurrentSessionId(id)
+    setSessionId(id)
+    setCharacterId(cid)
     setView('chat')
   }
 
-  function openSession(id: string) {
+  function openSession(id: string, cid?: string) {
     setCurrentSessionId(id)
     setSessionId(id)
+    if (cid) setCharacterId(cid)
     setView('chat')
   }
 
@@ -32,16 +59,27 @@ export default function App() {
       <div className="vignette" />
 
       <div className="app">
-        <Sidebar view={view} onView={setView} onNewChat={startNewChat} userId={userId} />
+        <Sidebar
+          view={view}
+          onView={(v) => setView(v)}
+          onNewChat={startNewChat}
+          onSession={openSession}
+          sessionId={sessionId}
+          userId={userId}
+        />
 
         <main className="stage">
-          {view === 'chat' && <ChatView key={sessionId} sessionId={sessionId} userId={userId} />}
-          {view === 'history' && (
-            <SessionHistory currentId={sessionId} onOpen={openSession} onNewChat={startNewChat} />
+          {view === 'character-select' && (
+            <CharacterSelect onSelect={onCharacterSelected} />
+          )}
+          {view === 'chat' && (
+            <ChatView key={sessionId} sessionId={sessionId} userId={userId} characterId={characterId} />
           )}
           {view === 'memory' && <MemoryView userId={userId} />}
           {view === 'documents' && <DocumentsView />}
           {view === 'skills' && <SkillsView />}
+          {view === 'characters' && <CharactersView />}
+          {view === 'eval' && <EvalDashboard />}
           {view === 'wechat' && <WechatBinding userId={userId} />}
         </main>
       </div>

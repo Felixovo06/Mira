@@ -1,3 +1,21 @@
+export interface EvalReport {
+  baseUrl: string
+  summary: Record<string, unknown>
+  diff?: {
+    regressions: Array<Record<string, unknown>>
+    improvements: Array<Record<string, unknown>>
+    regression_count: number
+    improvement_count: number
+  }
+  cases: Array<Record<string, unknown>>
+}
+
+export interface EvalReportEnvelope {
+  running: boolean
+  error?: string
+  report: EvalReport | null
+}
+
 export interface Message {
   id: string
   role: 'user' | 'assistant' | 'tool' | 'system'
@@ -124,7 +142,13 @@ export interface CharacterCard {
   id: string
   name: string
   description?: string
+  personality?: string
+  scenario?: string
   firstMessage?: string
+  exampleDialogues?: string[]
+  speakingStyle?: string
+  relationshipToUser?: string
+  systemNotes?: string
   tags?: string[]
 }
 

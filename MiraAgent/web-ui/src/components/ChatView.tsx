@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import type { CharacterCard, DocumentInfo, Message, StreamEvent, ToolInfo, TraceEvent } from '../types'
-import { documentDownloadUrl, getCharacters, getMessages, getSessionTrace, getTools, interrupt, streamChat, uploadDocument } from '../api'
+import type { DocumentInfo, Message, StreamEvent, ToolInfo, TraceEvent } from '../types'
+import { documentDownloadUrl, getMessages, getSessionTrace, getTools, interrupt, streamChat, uploadDocument } from '../api'
 import { registerSession } from '../sessionStore'
 import MessageBubble from './MessageBubble'
 import ToolChip from './ToolChip'
@@ -13,9 +13,10 @@ const isImageName = (name: string) => IMAGE_EXT.test(name)
 interface Props {
   sessionId: string
   userId: string
+  characterId: string
 }
 
-export default function ChatView({ sessionId, userId }: Props) {
+export default function ChatView({ sessionId, userId, characterId }: Props) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -26,8 +27,6 @@ export default function ChatView({ sessionId, userId }: Props) {
   const [tools, setTools] = useState<ToolInfo[]>([])
   const [enabled, setEnabled] = useState<Set<string>>(new Set())
   const [toolsOpen, setToolsOpen] = useState(false)
-  const [characters, setCharacters] = useState<CharacterCard[]>([])
-  const [characterId, setCharacterId] = useState<string>('mira')
   const [attachments, setAttachments] = useState<DocumentInfo[]>([])
   const [uploading, setUploading] = useState(false)
   const runIdRef = useRef<string | null>(null)
@@ -36,18 +35,11 @@ export default function ChatView({ sessionId, userId }: Props) {
   const accRef = useRef('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // 加载工具与角色（一次）。默认启用 LOW/MEDIUM 工具，HIGH/CRITICAL 默认关闭（与权限门控一致）。
   useEffect(() => {
     getTools()
       .then((t) => {
         setTools(t)
         setEnabled(new Set(t.filter((x) => x.riskLevel === 'LOW' || x.riskLevel === 'MEDIUM').map((x) => x.name)))
-      })
-      .catch(() => {})
-    getCharacters()
-      .then((cs) => {
-        setCharacters(cs)
-        if (cs.length && !cs.some((c) => c.id === 'mira')) setCharacterId(cs[0].id)
       })
       .catch(() => {})
   }, [])
@@ -133,7 +125,7 @@ export default function ChatView({ sessionId, userId }: Props) {
       sendTools.add('document_write')
     }
 
-    registerSession(sessionId, messages.length === 0 ? content : '')
+    registerSession(sessionId, messages.length === 0 ? content : '', characterId)
 
     const userMsg: Message = {
       id: crypto.randomUUID(),
@@ -215,19 +207,7 @@ export default function ChatView({ sessionId, userId }: Props) {
       <header className="chat-head">
         <div className="chat-head-l">
           <span className="chat-title">对话</span>
-          {characters.length > 0 && (
-            <select
-              className="char-select"
-              value={characterId}
-              onChange={(e) => setCharacterId(e.target.value)}
-              disabled={streaming}
-              title="选择角色"
-            >
-              {characters.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          )}
+          <span className="char-badge">{characterId}</span>
           <span className="chat-sid mono">{sessionId}</span>
         </div>
         <div className="chat-head-r">

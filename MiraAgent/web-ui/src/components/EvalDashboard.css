@@ -1,0 +1,69 @@
+.evald {
+  height: 100%; border-radius: var(--r-xl);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.evald-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  padding: 26px 28px 22px; border-bottom: 1px solid var(--stroke);
+}
+.evald-title { font-family: var(--font-display); font-size: 26px; font-weight: 700; letter-spacing: -0.01em; }
+.evald-sub { color: var(--text-dim); font-size: 13px; margin-top: 5px; }
+.evald-spin {
+  display: inline-block; width: 15px; height: 15px; border-radius: 50%;
+  border: 2px solid rgba(0,0,0,0.25); border-top-color: #042018; animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.evald-error {
+  margin: 14px 28px 0; padding: 10px 14px; border-radius: var(--r-lg);
+  background: rgba(255,122,122,0.1); border: 1px solid rgba(255,122,122,0.25);
+  color: var(--danger); font-size: 13px;
+}
+
+.evald-scroll { flex: 1; overflow-y: auto; padding: 22px 28px 30px; }
+
+.evald-group { margin-bottom: 26px; }
+.evald-gtitle {
+  font-size: 13px; font-weight: 600; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 12px;
+}
+.evald-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.evald-card {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 16px 18px; border-radius: var(--r-lg);
+  background: var(--glass-2); border: 1px solid var(--stroke);
+  animation: rise 0.35s ease both;
+}
+.evald-cval { font-family: var(--font-display); font-size: 26px; font-weight: 700; line-height: 1; }
+.evald-clabel { font-size: 12px; color: var(--text-dim); }
+.evald-card.good { border-color: rgba(47,224,168,0.4); background: var(--accent-soft); }
+.evald-card.good .evald-cval { color: var(--accent); }
+.evald-card.mid { border-color: rgba(240,180,90,0.4); background: rgba(240,180,90,0.08); }
+.evald-card.bad { border-color: rgba(255,122,122,0.45); background: rgba(255,122,122,0.1); }
+.evald-card.bad .evald-cval { color: var(--danger); }
+
+.evald-difflist { display: flex; flex-direction: column; gap: 8px; }
+.evald-diff {
+  display: flex; justify-content: space-between; gap: 14px;
+  padding: 9px 13px; border-radius: 10px; font-size: 12.5px;
+  background: var(--glass-2); border: 1px solid var(--stroke);
+}
+.evald-diff.good { border-left: 3px solid var(--accent); }
+.evald-diff.bad { border-left: 3px solid var(--danger); }
+
+.evald-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.evald-table th, .evald-table td {
+  text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--stroke);
+}
+.evald-table th { color: var(--text-faint); font-weight: 600; font-size: 11.5px; }
+.evald-table td.ok { color: var(--accent); font-weight: 600; }
+.evald-table td.fail { color: var(--danger); font-weight: 600; }
+.evald-tools { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+.mono { font-family: var(--font-mono, ui-monospace, monospace); }
+
+.evald-empty {
+  min-height: 320px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; text-align: center;
+}
+.evald-empty p { font-family: var(--font-display); font-size: 18px; font-weight: 600; }
+.evald-empty span { color: var(--text-dim); font-size: 13px; }

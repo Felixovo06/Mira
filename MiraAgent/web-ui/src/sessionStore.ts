@@ -4,6 +4,7 @@
 export interface SessionMeta {
   id: string
   title: string
+  characterId?: string
   createdAt: number
   updatedAt: number
 }
@@ -59,15 +60,16 @@ function clip(s: string): string {
   return t.length > 30 ? t.slice(0, 30) + '…' : t
 }
 
-export function registerSession(id: string, titleSeed: string): void {
+export function registerSession(id: string, titleSeed: string, characterId?: string): void {
   const list = listSessions()
   const now = Date.now()
   const existing = list.find((s) => s.id === id)
   if (existing) {
     existing.updatedAt = now
     if ((!existing.title || existing.title === '新对话') && titleSeed) existing.title = clip(titleSeed)
+    if (characterId && !existing.characterId) existing.characterId = characterId
   } else {
-    list.push({ id, title: titleSeed ? clip(titleSeed) : '新对话', createdAt: now, updatedAt: now })
+    list.push({ id, title: titleSeed ? clip(titleSeed) : '新对话', characterId, createdAt: now, updatedAt: now })
   }
   saveAll(list)
 }

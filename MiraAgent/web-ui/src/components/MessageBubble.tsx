@@ -47,7 +47,7 @@ export default function MessageBubble({ role, content, pending }: Props) {
     <div className={`row ${isUser ? 'row-user' : 'row-bot'}`}>
       {!isUser && (
         <div className="avatar">
-          <span />
+          <img src="/mira-logo.png" alt="Mira" className="avatar-logo" />
         </div>
       )}
       <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-bot'}`}>
