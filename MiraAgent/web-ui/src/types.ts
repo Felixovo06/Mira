@@ -152,6 +152,13 @@ export interface CharacterCard {
   tags?: string[]
 }
 
+export interface StyleConstraint {
+  enabled: boolean
+  worldSetting?: string
+  tone?: string
+  styleRules?: string[]
+}
+
 export interface WeixinLoginState {
   loggedIn: boolean
   status: 'logged_in' | 'qr' | 'scaned' | 'expired' | 'idle' | 'error' | 'disabled'

@@ -6,6 +6,7 @@ import MemoryView from './components/MemoryView'
 import DocumentsView from './components/DocumentsView'
 import SkillsView from './components/SkillsView'
 import CharactersView from './components/CharactersView'
+import StyleView from './components/StyleView'
 import EvalDashboard from './components/EvalDashboard'
 import WechatBinding from './components/WechatBinding'
 import { ensureUserId, getCurrentSessionId, listSessions, newSessionId, setCurrentSessionId } from './sessionStore'
@@ -79,6 +80,7 @@ export default function App() {
           {view === 'documents' && <DocumentsView />}
           {view === 'skills' && <SkillsView />}
           {view === 'characters' && <CharactersView />}
+          {view === 'style' && <StyleView />}
           {view === 'eval' && <EvalDashboard />}
           {view === 'wechat' && <WechatBinding userId={userId} />}
         </main>

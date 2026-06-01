@@ -8,6 +8,7 @@ import type {
   SkillDetail,
   SkillIndex,
   StreamEvent,
+  StyleConstraint,
   ToolCall,
   ToolExecution,
   ToolInfo,
@@ -243,6 +244,24 @@ export async function deleteDocument(name: string): Promise<void> {
 
 export function documentDownloadUrl(name: string): string {
   return `${BASE}/documents/${encodeURIComponent(name)}`
+}
+
+// ---- 全局风格约束 ----
+
+export async function getStyleConstraint(): Promise<StyleConstraint> {
+  const res = await fetch(`${BASE}/style`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function saveStyleConstraint(sc: StyleConstraint): Promise<StyleConstraint> {
+  const res = await fetch(`${BASE}/style`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(sc),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`)
+  return res.json()
 }
 
 // ---- 评测 Dashboard ----

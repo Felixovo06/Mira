@@ -2,9 +2,9 @@ import { type MouseEvent, type ReactNode, useState, useEffect } from 'react'
 import { listSessions, removeSession, type SessionMeta } from '../sessionStore'
 import './Sidebar.css'
 
-export type View = 'chat' | 'character-select' | 'memory' | 'documents' | 'skills' | 'characters' | 'eval' | 'wechat'
+export type View = 'chat' | 'character-select' | 'memory' | 'documents' | 'skills' | 'characters' | 'style' | 'eval' | 'wechat'
 
-type ToolView = 'memory' | 'documents' | 'skills' | 'characters' | 'eval' | 'wechat'
+type ToolView = 'memory' | 'documents' | 'skills' | 'characters' | 'style' | 'eval' | 'wechat'
 
 interface Props {
   view: View
@@ -54,6 +54,15 @@ const TOOL_NAV: { id: ToolView; label: string; icon: ReactNode }[] = [
         <circle cx="12" cy="8" r="4" />
         <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" strokeLinecap="round" />
         <path d="M18 3l1.5 1.5L22 2M18 7h4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    id: 'style',
+    label: '风格',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <path d="M15 4V2M15 14v-2M8 9h2M20 9h2M17.8 11.8 19 13M17.8 6.2 19 5M3 21l9-9M12.2 6.2 11 5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
   },
