@@ -57,6 +57,7 @@ public class ConversationLoop {
         int modelCallCount = 0;
         int toolCallCount = 0;
         int stepIndex = 1;
+        int lastRealInputTokens = 0; // 由模型返回的真实输入 token 数，0 表示尚无数据
 
         while (true) {
             if (request.getInterruptSignal().isInterrupted()) {
@@ -85,6 +86,7 @@ public class ConversationLoop {
                     .characterProfile(request.getCharacterProfile())
                     .sessionHistory(conversationHistory)
                     .toolDefinitions(toolRegistry.listAvailable(resolveCtx))
+                    .contextBudget(lastRealInputTokens)
                     .build();
 
             PromptBuildResult promptResult = promptBuilder.build(promptRequest);
@@ -123,8 +125,13 @@ public class ConversationLoop {
                         .status(RunStatus.FAILED).error(e.getMessage()).toolExecutions(allToolResults).build();
             }
 
+            if (response.getUsage() != null && response.getUsage().getInputTokens() > 0) {
+                lastRealInputTokens = response.getUsage().getInputTokens();
+            }
             emitTrace(request, runId, sessionId, stepIndex++, TraceEventType.MODEL_RESPONDED,
-                    Map.of("finishReason", String.valueOf(response.getFinishReason())));
+                    Map.of("finishReason", String.valueOf(response.getFinishReason()),
+                            "inputTokens", lastRealInputTokens,
+                            "outputTokens", response.getUsage() != null ? response.getUsage().getOutputTokens() : 0));
 
             if (response.hasError()) {
                 streamError(request, response.getError().getMessage());
