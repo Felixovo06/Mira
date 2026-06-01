@@ -313,6 +313,7 @@ export default function ChatView({ sessionId, userId }: Props) {
       )}
 
       <div className="composer">
+       <div className="composer-inner">
         <input
           ref={fileInputRef}
           type="file"
@@ -352,6 +353,7 @@ export default function ChatView({ sessionId, userId }: Props) {
             </svg>
           </button>
         )}
+       </div>
       </div>
 
       <TracePanel open={traceOpen} traces={traces} onClose={() => setTraceOpen(false)} />
