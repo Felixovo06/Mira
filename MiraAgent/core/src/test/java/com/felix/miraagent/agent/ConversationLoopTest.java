@@ -96,6 +96,17 @@ class ConversationLoopTest {
     }
 
     @Test
+    void shouldAggregateUsageIntoRunResult() {
+        // 回归:成功 RunResult 必须带上 token usage(评测发现此前为 null)
+        fakeModel.thenReplyWithUsage("Hi there", 123);
+        var result = loop.run(buildRequest("s-usage", List.of(userMessage("Hi"))));
+
+        assertEquals(RunStatus.SUCCESS, result.getStatus());
+        assertNotNull(result.getUsage(), "RunResult 应携带 usage");
+        assertEquals(123, result.getUsage().getInputTokens());
+    }
+
+    @Test
     void shouldDispatchToolAndContinueLoop() {
         fakeModel.thenCallTool("tc1", "note", "{\"content\":\"important note\"}")
                  .thenReply("I saved that note for you.");

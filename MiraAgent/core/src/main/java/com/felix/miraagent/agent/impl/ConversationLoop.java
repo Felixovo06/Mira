@@ -183,6 +183,8 @@ public class ConversationLoop {
         int toolCallCount = 0;
         int stepIndex = 1;
         int lastRealInputTokens = 0; // 由模型返回的真实输入 token 数，0 表示尚无数据
+        int totalInputTokens = 0;    // 跨所有模型调用累加（含工具轮次），透出到 RunResult.usage
+        int totalOutputTokens = 0;
 
         while (true) {
             if (request.getInterruptSignal().isInterrupted()) {
@@ -275,6 +277,10 @@ public class ConversationLoop {
 
             if (response.getUsage() != null && response.getUsage().getInputTokens() > 0) {
                 lastRealInputTokens = response.getUsage().getInputTokens();
+            }
+            if (response.getUsage() != null) {
+                totalInputTokens += response.getUsage().getInputTokens();
+                totalOutputTokens += response.getUsage().getOutputTokens();
             }
             emitTrace(request, runId, sessionId, stepIndex++, TraceEventType.MODEL_RESPONDED,
                     Map.of("finishReason", String.valueOf(response.getFinishReason()),
@@ -418,6 +424,10 @@ public class ConversationLoop {
                     .status(RunStatus.SUCCESS)
                     .finalMessage(finalMsg)
                     .toolExecutions(allToolResults)
+                    .usage(UsageInfo.builder()
+                            .inputTokens(totalInputTokens)
+                            .outputTokens(totalOutputTokens)
+                            .build())
                     .build();
         }
     }
