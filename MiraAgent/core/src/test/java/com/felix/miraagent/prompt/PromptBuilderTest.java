@@ -4,6 +4,7 @@ import com.felix.miraagent.character.CharacterProfile;
 import com.felix.miraagent.model.Message;
 import com.felix.miraagent.model.MessageRole;
 import com.felix.miraagent.prompt.impl.DefaultPromptBuilder;
+import com.felix.miraagent.style.StyleConstraint;
 import com.felix.miraagent.tools.ToolDefinition;
 import com.felix.miraagent.tools.ToolRiskLevel;
 import com.felix.miraagent.tools.builtin.BuiltinTools;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -95,5 +97,55 @@ class PromptBuilderTest {
         var result = builder.build(request);
         assertFalse(result.getMessages().isEmpty());
         assertEquals(MessageRole.SYSTEM, result.getMessages().get(0).getRole());
+    }
+
+    @Test
+    void globalStyleConstraintInjectedBeforeCharacter() {
+        var style = StyleConstraint.builder()
+                .worldSetting("STYLE_WORLD_MARK")
+                .tone("统一语气")
+                .build();
+        var styledBuilder = new DefaultPromptBuilder(() -> Optional.of(style));
+
+        var request = PromptBuildRequest.builder()
+                .characterProfile(CharacterProfile.builder().id("mira").name("MIRA_MARK").build())
+                .build();
+        var prompt = styledBuilder.build(request).getStableSystemPrompt();
+
+        assertTrue(prompt.contains("STYLE_WORLD_MARK"), "世界设定应注入 stableSystemPrompt");
+        assertTrue(prompt.indexOf("STYLE_WORLD_MARK") < prompt.indexOf("MIRA_MARK"),
+                "全局风格约束应位于角色 section 之前");
+    }
+
+    @Test
+    void noStyleProviderLeavesPromptUnchanged() {
+        // 无 provider（默认构造）时不应出现风格约束相关内容
+        var request = PromptBuildRequest.builder()
+                .characterProfile(CharacterProfile.defaultProfile())
+                .build();
+        var prompt = builder.build(request).getStableSystemPrompt();
+        assertFalse(prompt.contains("# 世界设定"));
+    }
+
+    @Test
+    void userImageDataUrlsSurviveEphemeralRewrite() {
+        // 回归：ephemeral 重建最新 USER 消息时，imageDataUrls 不能丢
+        var userMsg = Message.builder()
+                .id(UUID.randomUUID().toString())
+                .role(MessageRole.USER)
+                .content("头像好看吗")
+                .imageDataUrl("data:image/png;base64,AAAA")
+                .build();
+        var request = PromptBuildRequest.builder()
+                .sessionHistoryItem(userMsg)
+                .temporaryInstructions("TEMP")  // 触发 ephemeral，走重建分支
+                .build();
+
+        var messages = builder.build(request).getMessages();
+        var lastUser = messages.get(messages.size() - 1);
+
+        assertEquals(MessageRole.USER, lastUser.getRole());
+        assertEquals(List.of("data:image/png;base64,AAAA"), lastUser.getImageDataUrls());
+        assertTrue(lastUser.getContent().contains("TEMP"), "ephemeral 指令应已并入 content");
     }
 }
