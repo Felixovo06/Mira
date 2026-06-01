@@ -3,6 +3,7 @@ import Sidebar, { type View } from './components/Sidebar'
 import ChatView from './components/ChatView'
 import SessionHistory from './components/SessionHistory'
 import MemoryView from './components/MemoryView'
+import DocumentsView from './components/DocumentsView'
 import SkillsView from './components/SkillsView'
 import WechatBinding from './components/WechatBinding'
 import { ensureUserId, getCurrentSessionId, newSessionId, setCurrentSessionId } from './sessionStore'
@@ -39,6 +40,7 @@ export default function App() {
             <SessionHistory currentId={sessionId} onOpen={openSession} onNewChat={startNewChat} />
           )}
           {view === 'memory' && <MemoryView userId={userId} />}
+          {view === 'documents' && <DocumentsView />}
           {view === 'skills' && <SkillsView />}
           {view === 'wechat' && <WechatBinding userId={userId} />}
         </main>

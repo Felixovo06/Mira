@@ -1,6 +1,10 @@
 spring:
   application:
     name: MiraAgent
+  servlet:
+    multipart:
+      max-file-size: 25MB        # 文档上传上限
+      max-request-size: 25MB
   datasource:
     url: ${MIRA_DB_URL}
     username: ${MIRA_DB_USERNAME}
@@ -47,9 +51,11 @@ mira:
   #       url: https://mcp.exa.ai/mcp
   #       tool-risk-level: low
 
-  # 内置工具：calculator(LOW)/web_fetch(MEDIUM)/file_read(MEDIUM)/file_write(HIGH) + note/todo。
+  # 内置工具：calculator(LOW)/web_fetch(MEDIUM)/file_read(MEDIUM)/file_write(HIGH) + note/todo
+  # + 文档处理 document_list(LOW)/document_read(MEDIUM,Tika 全格式解析)/document_write(MEDIUM,POI 生成 docx/xlsx)。
   # max-risk-level 控制放行阈值：默认 medium，危险写入工具 file_write(HIGH) 被门控；
-  # 抬到 high 才放行（危险工具的显式确认流程）。file.base-dir 为文件工具沙箱根目录。
+  # 抬到 high 才放行（危险工具的显式确认流程）。
+  # file.base-dir 为文件/文档工具共用的沙箱根目录，也是 /api/documents 上传落盘处。
   tools:
     max-risk-level: ${MIRA_TOOLS_MAX_RISK:medium}
     file:

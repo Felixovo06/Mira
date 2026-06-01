@@ -146,3 +146,9 @@ export interface MemoryItem {
   createdAt?: string
   updatedAt?: string
 }
+
+export interface DocumentInfo {
+  name: string
+  size: number
+  modified: string
+}

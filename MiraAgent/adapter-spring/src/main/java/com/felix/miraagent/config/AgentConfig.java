@@ -29,6 +29,9 @@ import com.felix.miraagent.tools.artifact.ArtifactProperties;
 import com.felix.miraagent.tools.artifact.FileToolResultCache;
 import com.felix.miraagent.tools.artifact.ToolResultCache;
 import com.felix.miraagent.tools.builtin.BuiltinTools;
+import com.felix.miraagent.tools.builtin.DocumentListToolHandler;
+import com.felix.miraagent.tools.builtin.DocumentReadToolHandler;
+import com.felix.miraagent.tools.builtin.DocumentWriteToolHandler;
 import com.felix.miraagent.tools.builtin.FileReadToolHandler;
 import com.felix.miraagent.tools.builtin.FileToolProperties;
 import com.felix.miraagent.tools.builtin.FileWriteToolHandler;
@@ -89,6 +92,12 @@ public class AgentConfig {
                 new FileReadToolHandler(fileToolProperties.getBaseDir()));
         registry.register(FileWriteToolHandler.definition(),
                 new FileWriteToolHandler(fileToolProperties.getBaseDir()));
+        registry.register(DocumentReadToolHandler.definition(),
+                new DocumentReadToolHandler(fileToolProperties.getBaseDir()));
+        registry.register(DocumentWriteToolHandler.definition(),
+                new DocumentWriteToolHandler(fileToolProperties.getBaseDir()));
+        registry.register(DocumentListToolHandler.definition(),
+                new DocumentListToolHandler(fileToolProperties.getBaseDir()));
         memoryRetriever.ifPresent(r ->
                 registry.register(RecallMemoryToolHandler.definition(), new RecallMemoryToolHandler(r)));
         memoryWriter.ifPresent(w ->

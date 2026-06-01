@@ -2,6 +2,7 @@ import type {
   CharacterCard,
   ChatResponse,
   CuratorReport,
+  DocumentInfo,
   MemoryItem,
   Message,
   SkillDetail,
@@ -199,6 +200,31 @@ export async function getSessionTrace(sessionId: string): Promise<TraceEvent[]> 
   const res = await fetch(`${BASE}/traces/sessions/${sessionId}`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
+}
+
+// ---- 文档工作区 ----
+
+export async function getDocuments(): Promise<DocumentInfo[]> {
+  const res = await fetch(`${BASE}/documents`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function uploadDocument(file: File): Promise<DocumentInfo> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${BASE}/documents`, { method: 'POST', body: form })
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`)
+  return res.json()
+}
+
+export async function deleteDocument(name: string): Promise<void> {
+  const res = await fetch(`${BASE}/documents/${encodeURIComponent(name)}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+}
+
+export function documentDownloadUrl(name: string): string {
+  return `${BASE}/documents/${encodeURIComponent(name)}`
 }
 
 // ---- 微信扫码登录 ----
