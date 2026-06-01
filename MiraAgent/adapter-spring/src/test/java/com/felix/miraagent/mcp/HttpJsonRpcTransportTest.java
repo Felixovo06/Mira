@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -72,5 +73,54 @@ class HttpJsonRpcTransportTest {
         transport.request("tools/list", null);
 
         assertNull(seenApiKey.get(), "未配置 headers 时不应发出 x-api-key");
+    }
+
+    @Test
+    void notifyToleratesEmptyAcceptedResponse() throws IOException {
+        // streamable HTTP server 对通知返回 202 空体，notify 不能按结果解析而抛错
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/mcp", exchange -> {
+            exchange.sendResponseHeaders(202, -1); // 202, 无响应体
+            exchange.close();
+        });
+        server.start();
+
+        String url = "http://localhost:" + server.getAddress().getPort() + "/mcp";
+        HttpJsonRpcTransport transport = new HttpJsonRpcTransport("notif", url, new ObjectMapper());
+
+        assertDoesNotThrow(() -> transport.notify("notifications/initialized", null));
+    }
+
+    @Test
+    void sessionIdFromResponseIsResentOnNextRequest() throws IOException {
+        // 有状态 server：initialize 下发 mcp-session-id，后续请求须回传
+        AtomicReference<String> firstSeen = new AtomicReference<>("present");
+        AtomicReference<String> secondSeen = new AtomicReference<>();
+        boolean[] first = {true};
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/mcp", exchange -> {
+            String sid = exchange.getRequestHeaders().getFirst("Mcp-Session-Id");
+            if (first[0]) {
+                first[0] = false;
+                firstSeen.set(sid);
+                exchange.getResponseHeaders().add("Mcp-Session-Id", "sess-42");
+            } else {
+                secondSeen.set(sid);
+            }
+            byte[] resp = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, resp.length);
+            exchange.getResponseBody().write(resp);
+            exchange.close();
+        });
+        server.start();
+
+        String url = "http://localhost:" + server.getAddress().getPort() + "/mcp";
+        HttpJsonRpcTransport transport = new HttpJsonRpcTransport("stateful", url, new ObjectMapper());
+
+        transport.request("initialize", null);
+        transport.request("tools/list", null);
+
+        assertNull(firstSeen.get(), "首次请求无 session id");
+        assertEquals("sess-42", secondSeen.get(), "拿到 session id 后应在后续请求回传");
     }
 }

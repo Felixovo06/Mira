@@ -40,13 +40,11 @@ mira:
   #       type: http
   #       url: http://localhost:9000/mcp
   #     # 联网搜索（Exa 远程 MCP，移植自 opencode 的 websearch 方案）：
-  #     # 启用后桥接出 mcp__exa__web_search_exa 等工具，复用统一权限/trace/artifact。
-  #     # 需在环境变量 EXA_API_KEY 配置 https://exa.ai 的 key。
+  #     # 启用后桥接出 mcp__exa__web_search_exa / web_fetch_exa 等工具，复用统一权限/trace/artifact。
+  #     # 该端点免费免 key 即可使用；若有 https://exa.ai 的 key 可加 headers.x-api-key 提额度。
   #     - id: exa
   #       type: http
   #       url: https://mcp.exa.ai/mcp
-  #       headers:
-  #         x-api-key: ${EXA_API_KEY}
   #       tool-risk-level: low
 
   # 内置工具：calculator(LOW)/web_fetch(MEDIUM)/file_read(MEDIUM)/file_write(HIGH) + note/todo。
