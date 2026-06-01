@@ -30,10 +30,10 @@ public class OpenAICompatibleEmbeddingClient implements EmbeddingClient {
     @Override
     public List<Float> embed(String text) {
         try {
-            Map<String, Object> requestBody = Map.of(
-                    "model", props.getModel(),
-                    "input", text
-            );
+            // 显式指定输出维度以匹配 memory_index.embedding 列(如百炼 text-embedding-v4 需 dimensions=1536)
+            Map<String, Object> requestBody = props.getDimensions() > 0
+                    ? Map.of("model", props.getModel(), "input", text, "dimensions", props.getDimensions())
+                    : Map.of("model", props.getModel(), "input", text);
 
             String responseBody = restClient.post()
                     .uri("/embeddings")
