@@ -1,0 +1,30 @@
+.tool-chip {
+  align-self: flex-start;
+  max-width: 100%;
+  border: 1px solid rgba(70, 184, 240, 0.22);
+  background: rgba(70, 184, 240, 0.06);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  animation: pop 0.3s ease both;
+}
+.tool-chip.pending { border-color: rgba(245, 196, 81, 0.28); background: rgba(245, 196, 81, 0.06); }
+
+.tool-chip-head {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; padding: 9px 13px;
+  background: transparent; color: var(--text-dim);
+  cursor: pointer; font-size: 13px;
+}
+.tool-chip-ic { color: var(--accent-3); display: grid; place-items: center; }
+.tool-chip.pending .tool-chip-ic { color: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
+.tool-chip-name { color: var(--text); font-size: 12.5px; }
+.tool-chip-status { font-size: 11px; color: var(--text-faint); }
+.tool-chip-caret { margin-left: 4px; transition: transform 0.18s ease; color: var(--text-faint); }
+.tool-chip-caret.open { transform: rotate(180deg); }
+
+.tool-chip-body {
+  margin: 0; padding: 11px 14px;
+  border-top: 1px solid var(--stroke);
+  font-size: 12px; line-height: 1.55; color: var(--text-dim);
+  white-space: pre-wrap; word-break: break-word; max-height: 240px; overflow: auto;
+}

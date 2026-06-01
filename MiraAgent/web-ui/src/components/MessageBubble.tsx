@@ -1,37 +1,34 @@
 import './MessageBubble.css'
 
-interface Message {
-  id: string
+interface Props {
   role: 'user' | 'assistant'
   content: string
   pending?: boolean
 }
 
-interface Props {
-  message: Message
-}
-
-export function MessageBubble({ message }: Props) {
-  const isUser = message.role === 'user'
-  const hasContent = message.content.length > 0
+export default function MessageBubble({ role, content, pending }: Props) {
+  const isUser = role === 'user'
+  const hasContent = content.length > 0
 
   return (
-    <div className={`bubble-row ${isUser ? 'bubble-row--user' : 'bubble-row--assistant'}`}>
-      <div className={`bubble ${isUser ? 'bubble--user' : 'bubble--assistant'}`}>
-        <span className="bubble-role">{isUser ? 'You' : 'Mira'}</span>
+    <div className={`row ${isUser ? 'row-user' : 'row-bot'}`}>
+      {!isUser && (
+        <div className="avatar">
+          <span />
+        </div>
+      )}
+      <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-bot'}`}>
         {hasContent ? (
-          <p className="bubble-content">
-            {message.content}
-            {message.pending && <span className="bubble-stream-cursor" />}
+          <p className="bubble-text">
+            {content}
+            {pending && <span className="cursor" />}
           </p>
-        ) : message.pending ? (
-          <span className="bubble-thinking">
-            <span className="dot" />
-            <span className="dot" />
-            <span className="dot" />
+        ) : pending ? (
+          <span className="thinking">
+            <i /><i /><i />
           </span>
         ) : (
-          <p className="bubble-content" />
+          <p className="bubble-text" />
         )}
       </div>
     </div>
