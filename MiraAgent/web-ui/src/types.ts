@@ -128,6 +128,13 @@ export interface CharacterCard {
   tags?: string[]
 }
 
+export interface WeixinLoginState {
+  loggedIn: boolean
+  status: 'logged_in' | 'qr' | 'scaned' | 'expired' | 'idle' | 'error' | 'disabled'
+  qrImage?: string | null
+  message?: string | null
+}
+
 export interface MemoryItem {
   id: string
   userId: string

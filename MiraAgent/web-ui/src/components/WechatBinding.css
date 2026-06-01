@@ -27,6 +27,25 @@
   background: linear-gradient(150deg, #f4fff9, #d9faec);
   box-shadow: 0 18px 50px -18px rgba(43, 213, 118, 0.5);
 }
+.wx-qr-img {
+  display: grid; place-items: center; width: 196px; height: 196px;
+  border-radius: 8px; background: #fff;
+}
+.wx-qr-img svg { display: block; }
+.wx-qr-ph, .wx-done {
+  width: 196px; height: 196px; border-radius: 8px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  background: rgba(255,255,255,0.65); color: #2b6; font-size: 13px; font-weight: 600;
+}
+.wx-done span { color: #1a7; }
+.wx-status .dot.ok { background: var(--accent); }
+.wx-status .dot.err { background: var(--danger); }
+.wx-note .dot.ok { background: var(--accent); }
+.wx-note .dot.err { background: var(--danger); }
+.wx-note code {
+  font-family: var(--font-mono); font-size: 11.5px; padding: 1px 5px;
+  background: rgba(255,255,255,0.08); border-radius: 4px;
+}
 .wx-corner {
   position: absolute; width: 18px; height: 18px;
   border: 2.5px solid var(--wechat);

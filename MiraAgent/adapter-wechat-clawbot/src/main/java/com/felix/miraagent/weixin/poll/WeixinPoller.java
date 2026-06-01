@@ -43,9 +43,17 @@ public class WeixinPoller implements DisposableBean {
         this.characterId = characterId;
     }
 
-    public void start() {
+    public synchronized void start() {
+        if (pollerThread != null && pollerThread.isAlive()) {
+            log.debug("[Weixin] Poller already running, ignoring start()");
+            return;
+        }
         pollerThread = Thread.ofVirtual().name("weixin-poller").start(this::pollLoop);
         log.info("[Weixin] Poller started");
+    }
+
+    public synchronized boolean isRunning() {
+        return pollerThread != null && pollerThread.isAlive();
     }
 
     @Override

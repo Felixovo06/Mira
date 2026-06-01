@@ -4,6 +4,7 @@ import com.felix.miraagent.agent.AgentRuntime;
 import com.felix.miraagent.weixin.client.ILinkClient;
 import com.felix.miraagent.weixin.client.RuntimeConfig;
 import com.felix.miraagent.weixin.login.QrLoginService;
+import com.felix.miraagent.weixin.login.WeixinLoginService;
 import com.felix.miraagent.weixin.poll.ContextTokenStore;
 import com.felix.miraagent.weixin.poll.MessageDeduplicator;
 import com.felix.miraagent.weixin.poll.UserSessionMapper;
@@ -61,5 +62,11 @@ public class WeixinBotAutoConfig {
     public QrLoginService qrLoginService(WeixinProperties properties, ILinkClient iLinkClient,
                                          RuntimeConfig weixinRuntimeConfig, WeixinPoller weixinPoller) {
         return new QrLoginService(properties, iLinkClient, weixinRuntimeConfig, weixinPoller);
+    }
+
+    @Bean
+    public WeixinLoginService weixinLoginService(ILinkClient iLinkClient, RuntimeConfig weixinRuntimeConfig,
+                                                 WeixinPoller weixinPoller) {
+        return new WeixinLoginService(iLinkClient, weixinRuntimeConfig, weixinPoller);
     }
 }

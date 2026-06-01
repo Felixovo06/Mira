@@ -11,6 +11,7 @@ import type {
   ToolExecution,
   ToolInfo,
   TraceEvent,
+  WeixinLoginState,
 } from './types'
 
 const BASE = '/api'
@@ -186,6 +187,26 @@ export async function deleteMemory(memoryId: string, userId: string): Promise<vo
 
 export async function getSessionTrace(sessionId: string): Promise<TraceEvent[]> {
   const res = await fetch(`${BASE}/traces/sessions/${sessionId}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+// ---- 微信扫码登录 ----
+
+export async function getWeixinStatus(): Promise<WeixinLoginState> {
+  const res = await fetch(`${BASE}/weixin/status`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function requestWeixinQr(): Promise<WeixinLoginState> {
+  const res = await fetch(`${BASE}/weixin/qr`, { method: 'POST' })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function pollWeixin(): Promise<WeixinLoginState> {
+  const res = await fetch(`${BASE}/weixin/poll`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
