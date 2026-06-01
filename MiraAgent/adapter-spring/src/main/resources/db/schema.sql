@@ -59,3 +59,28 @@ create table if not exists tool_executions (
 
 create index if not exists idx_tool_executions_run_id on tool_executions(run_id);
 create index if not exists idx_tool_executions_session_id on tool_executions(session_id);
+
+-- P1 Memory Index
+create extension if not exists pg_trgm;
+
+create table if not exists memory_index (
+    id                text        primary key,
+    user_id           text        not null,
+    character_id      text,
+    scope             text        not null,
+    category          text        not null,
+    content_preview   text,
+    source_uri        text,
+    confidence        integer     not null default 80,
+    source_session_id text,
+    source_message_id text,
+    retrieval_terms   jsonb,
+    embedding_ref     text,
+    archived_at       timestamptz,
+    created_at        timestamptz not null default now(),
+    updated_at        timestamptz not null default now()
+);
+
+create index if not exists idx_memory_index_user_id on memory_index(user_id, scope, category) where archived_at is null;
+create index if not exists idx_memory_index_preview_trgm on memory_index using gin(content_preview gin_trgm_ops);
+create index if not exists idx_memory_index_fts on memory_index using gin(to_tsvector('simple', coalesce(content_preview, '')));
