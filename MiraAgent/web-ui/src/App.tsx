@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Sidebar, { type View } from './components/Sidebar'
 import ChatView from './components/ChatView'
 import SessionHistory from './components/SessionHistory'
+import SkillsView from './components/SkillsView'
 import WechatBinding from './components/WechatBinding'
 import { ensureUserId, getCurrentSessionId, newSessionId, setCurrentSessionId } from './sessionStore'
 import './App.css'
@@ -36,6 +37,7 @@ export default function App() {
           {view === 'history' && (
             <SessionHistory currentId={sessionId} onOpen={openSession} onNewChat={startNewChat} />
           )}
+          {view === 'skills' && <SkillsView />}
           {view === 'wechat' && <WechatBinding userId={userId} />}
         </main>
       </div>

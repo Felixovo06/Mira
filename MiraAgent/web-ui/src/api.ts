@@ -1,4 +1,14 @@
-import type { ChatResponse, Message, StreamEvent, ToolCall, ToolExecution, TraceEvent } from './types'
+import type {
+  ChatResponse,
+  CuratorReport,
+  Message,
+  SkillDetail,
+  SkillIndex,
+  StreamEvent,
+  ToolCall,
+  ToolExecution,
+  TraceEvent,
+} from './types'
 
 const BASE = '/api'
 
@@ -111,4 +121,34 @@ export async function getTrace(runId: string): Promise<TraceEvent[]> {
 
 export async function interrupt(runId: string): Promise<void> {
   await fetch(`${BASE}/runs/${runId}/interrupt`, { method: 'POST' })
+}
+
+// ---- Skills 管理 ----
+
+export async function getSkills(): Promise<SkillIndex[]> {
+  const res = await fetch(`${BASE}/skills`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function getSkill(skillId: string): Promise<SkillDetail> {
+  const res = await fetch(`${BASE}/skills/${skillId}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function pinSkill(skillId: string, pinned: boolean): Promise<void> {
+  const res = await fetch(`${BASE}/skills/${skillId}/pin?pinned=${pinned}`, { method: 'POST' })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+}
+
+export async function archiveSkill(skillId: string): Promise<void> {
+  const res = await fetch(`${BASE}/skills/${skillId}/archive`, { method: 'POST' })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+}
+
+export async function getCuratorReport(): Promise<CuratorReport> {
+  const res = await fetch(`${BASE}/skills/curator-report`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
 }

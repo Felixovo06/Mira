@@ -54,3 +54,61 @@ export interface TraceEvent {
   payload: Record<string, unknown>
   createdAt: string
 }
+
+export interface SkillIndex {
+  skillId: string
+  name: string
+  description: string
+  status: 'ACTIVE' | 'ARCHIVED'
+  tags?: string[]
+  pinned: boolean
+  useCount: number
+  version: number
+  sourceUri?: string
+  lastUsedAt?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface SkillDetail {
+  metadata: {
+    skillId: string
+    name: string
+    description: string
+    status: string
+    source?: string
+    version: number
+    tags?: string[]
+    pinned: boolean
+    useCount: number
+    viewCount: number
+    patchCount: number
+    createdAt?: string
+    updatedAt?: string
+    lastUsedAt?: string
+  }
+  content?: {
+    name: string
+    description: string
+    body: string
+    raw: string
+  }
+}
+
+export interface SkillSuggestion {
+  skillId: string
+  name: string
+  reason: string
+}
+
+export interface ConsolidationProposal {
+  skillIdA: string
+  skillIdB: string
+  similarity: number
+}
+
+export interface CuratorReport {
+  unused: SkillSuggestion[]
+  narrow: SkillSuggestion[]
+  similar: ConsolidationProposal[]
+}
