@@ -1,0 +1,77 @@
+package com.felix.miraagent.config;
+
+import com.felix.miraagent.agent.ModelConfig;
+import com.felix.miraagent.agent.AgentRuntime;
+import com.felix.miraagent.agent.impl.ConversationLoop;
+import com.felix.miraagent.agent.impl.DefaultAgentRuntime;
+import com.felix.miraagent.model.ModelClient;
+import com.felix.miraagent.model.ModelProperties;
+import com.felix.miraagent.prompt.PromptBuilder;
+import com.felix.miraagent.prompt.impl.DefaultPromptBuilder;
+import com.felix.miraagent.session.SessionStore;
+import com.felix.miraagent.session.impl.InMemorySessionStore;
+import com.felix.miraagent.tools.ToolDispatcher;
+import com.felix.miraagent.tools.ToolRegistry;
+import com.felix.miraagent.tools.builtin.BuiltinTools;
+import com.felix.miraagent.tools.impl.DefaultToolDispatcher;
+import com.felix.miraagent.tools.impl.InMemoryToolRegistry;
+import com.felix.miraagent.trace.TraceStore;
+import com.felix.miraagent.trace.impl.InMemoryTraceStore;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class AgentConfig {
+
+    @Bean
+    @ConditionalOnMissingBean(SessionStore.class)
+    public SessionStore inMemorySessionStore() {
+        return new InMemorySessionStore();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(TraceStore.class)
+    public TraceStore inMemoryTraceStore() {
+        return new InMemoryTraceStore();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ToolRegistry.class)
+    public ToolRegistry toolRegistry() {
+        InMemoryToolRegistry registry = new InMemoryToolRegistry();
+        BuiltinTools.registerAll(registry);
+        return registry;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ToolDispatcher.class)
+    public ToolDispatcher toolDispatcher(ToolRegistry toolRegistry) {
+        return new DefaultToolDispatcher(toolRegistry);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(PromptBuilder.class)
+    public PromptBuilder promptBuilder() {
+        return new DefaultPromptBuilder();
+    }
+
+    @Bean
+    public ConversationLoop conversationLoop(ModelClient modelClient, PromptBuilder promptBuilder,
+                                             ToolRegistry toolRegistry, ToolDispatcher toolDispatcher,
+                                             SessionStore sessionStore, TraceStore traceStore) {
+        return new ConversationLoop(modelClient, promptBuilder, toolRegistry, toolDispatcher,
+                sessionStore, traceStore);
+    }
+
+    @Bean
+    public AgentRuntime agentRuntime(ConversationLoop conversationLoop, SessionStore sessionStore,
+                                     ModelProperties modelProperties) {
+        ModelConfig defaultModelConfig = ModelConfig.builder()
+                .modelName(modelProperties.getName())
+                .temperature(modelProperties.getTemperature())
+                .maxTokens(modelProperties.getMaxTokens())
+                .build();
+        return new DefaultAgentRuntime(conversationLoop, sessionStore, defaultModelConfig);
+    }
+}

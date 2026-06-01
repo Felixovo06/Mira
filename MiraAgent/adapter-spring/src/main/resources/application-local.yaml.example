@@ -1,0 +1,10 @@
+# 复制为 application-local.yaml 并填入实际值（已加入 .gitignore）
+spring:
+  datasource:
+    url: jdbc:postgresql://HOST:5432/miraagent
+    username: YOUR_DB_USER
+    password: YOUR_DB_PASSWORD
+
+mira:
+  model:
+    api-key: YOUR_API_KEY

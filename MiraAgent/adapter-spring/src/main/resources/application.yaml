@@ -1,3 +1,23 @@
 spring:
   application:
     name: MiraAgent
+  datasource:
+    url: ${MIRA_DB_URL}
+    username: ${MIRA_DB_USERNAME}
+    password: ${MIRA_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 5000
+
+mira:
+  model:
+    base-url: ${MIRA_MODEL_BASE_URL:https://api.xiaomimimo.com/v1}
+    api-key: ${MIRA_MODEL_API_KEY}
+    name: ${MIRA_MODEL_NAME:mimov2.5flash}
+    temperature: ${MIRA_MODEL_TEMPERATURE:0.7}
+    max-tokens: ${MIRA_MODEL_MAX_TOKENS:2048}
+
+logging:
+  level:
+    com.felix.miraagent: DEBUG
