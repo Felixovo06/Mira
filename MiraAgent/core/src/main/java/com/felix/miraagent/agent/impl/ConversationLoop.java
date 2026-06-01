@@ -10,6 +10,7 @@ import com.felix.miraagent.prompt.PromptBuildRequest;
 import com.felix.miraagent.prompt.PromptBuildResult;
 import com.felix.miraagent.prompt.PromptBuilder;
 import com.felix.miraagent.session.SessionStore;
+import com.felix.miraagent.skill.SkillIndexInjector;
 import com.felix.miraagent.tools.ToolDispatchContext;
 import com.felix.miraagent.tools.ToolDispatcher;
 import com.felix.miraagent.tools.ToolExecutionResult;
@@ -55,6 +56,7 @@ public class ConversationLoop {
     private final ContextCompressor compressor;
     private final CompressionPolicy compressionPolicy;
     private final String summaryBaseDir;
+    private final SkillIndexInjector skillIndexInjector;
 
     public ConversationLoop(ModelClient modelClient, PromptBuilder promptBuilder,
                             ToolRegistry toolRegistry, ToolDispatcher toolDispatcher,
@@ -115,6 +117,20 @@ public class ConversationLoop {
                             ToolResultCache toolResultCache,
                             ContextCompressor compressor, CompressionPolicy compressionPolicy,
                             String summaryBaseDir) {
+        this(modelClient, promptBuilder, toolRegistry, toolDispatcher, sessionStore, traceStore,
+                toolExecutionStore, memoryStore, memoryRetriever, memoryWriter, toolResultCache,
+                compressor, compressionPolicy, summaryBaseDir, null);
+    }
+
+    public ConversationLoop(ModelClient modelClient, PromptBuilder promptBuilder,
+                            ToolRegistry toolRegistry, ToolDispatcher toolDispatcher,
+                            SessionStore sessionStore, TraceStore traceStore,
+                            ToolExecutionStore toolExecutionStore,
+                            MemoryStore memoryStore, MemoryRetriever memoryRetriever,
+                            SerializedMemoryWriter memoryWriter,
+                            ToolResultCache toolResultCache,
+                            ContextCompressor compressor, CompressionPolicy compressionPolicy,
+                            String summaryBaseDir, SkillIndexInjector skillIndexInjector) {
         this.modelClient = modelClient;
         this.promptBuilder = promptBuilder;
         this.toolRegistry = toolRegistry;
@@ -129,6 +145,7 @@ public class ConversationLoop {
         this.compressor = compressor;
         this.compressionPolicy = compressionPolicy;
         this.summaryBaseDir = summaryBaseDir;
+        this.skillIndexInjector = skillIndexInjector;
     }
 
     public RunResult run(AgentRunRequest request) {
@@ -189,6 +206,13 @@ public class ConversationLoop {
                     .contextBudget(lastRealInputTokens);
             if (!latestSummary.isBlank()) {
                 promptRequestBuilder.retrievedMemory("[Latest Context Summary]\n" + truncate(latestSummary, 1000));
+            }
+            // 渐进式披露：只把 Active skill 索引注入稳定 prompt，完整 SKILL.md 按需加载
+            if (skillIndexInjector != null) {
+                String skillIndex = skillIndexInjector.renderIndex();
+                if (skillIndex != null && !skillIndex.isBlank()) {
+                    promptRequestBuilder.skillIndex(skillIndex);
+                }
             }
             PromptBuildRequest promptRequest = promptRequestBuilder.build();
 

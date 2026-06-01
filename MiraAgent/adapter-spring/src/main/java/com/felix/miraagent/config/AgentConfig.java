@@ -18,6 +18,8 @@ import com.felix.miraagent.prompt.PromptBuilder;
 import com.felix.miraagent.prompt.impl.DefaultPromptBuilder;
 import com.felix.miraagent.session.SessionStore;
 import com.felix.miraagent.session.impl.InMemorySessionStore;
+import com.felix.miraagent.skill.SkillIndexInjector;
+import com.felix.miraagent.skill.SkillLoader;
 import com.felix.miraagent.tools.ToolDispatcher;
 import com.felix.miraagent.tools.ToolExecutionStore;
 import com.felix.miraagent.tools.ToolRegistry;
@@ -97,6 +99,12 @@ public class AgentConfig {
     }
 
     @Bean
+    @ConditionalOnMissingBean(SkillIndexInjector.class)
+    public SkillIndexInjector skillIndexInjector(SkillLoader skillLoader) {
+        return new SkillIndexInjector(skillLoader);
+    }
+
+    @Bean
     public ConversationLoop conversationLoop(ModelClient modelClient, PromptBuilder promptBuilder,
                                              ToolRegistry toolRegistry, ToolDispatcher toolDispatcher,
                                              SessionStore sessionStore, TraceStore traceStore,
@@ -106,14 +114,16 @@ public class AgentConfig {
                                              Optional<SerializedMemoryWriter> memoryWriter,
                                              Optional<ToolResultCache> toolResultCache,
                                              Optional<ContextCompressor> compressor,
-                                             SummaryProperties summaryProperties) {
+                                             SummaryProperties summaryProperties,
+                                             Optional<SkillIndexInjector> skillIndexInjector) {
         return new ConversationLoop(modelClient, promptBuilder, toolRegistry, toolDispatcher,
                 sessionStore, traceStore, toolExecutionStore,
                 memoryStore.orElse(null), memoryRetriever.orElse(null),
                 memoryWriter.orElse(null),
                 toolResultCache.orElse(null),
                 compressor.orElse(null), CompressionPolicy.defaultPolicy(),
-                summaryProperties.getBaseDir());
+                summaryProperties.getBaseDir(),
+                skillIndexInjector.orElse(null));
     }
 
     @Bean
