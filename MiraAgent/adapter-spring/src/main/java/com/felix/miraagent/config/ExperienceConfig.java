@@ -1,9 +1,11 @@
 package com.felix.miraagent.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.felix.miraagent.experience.BackgroundReview;
 import com.felix.miraagent.experience.ExperienceApplier;
 import com.felix.miraagent.experience.ExperienceExtractor;
 import com.felix.miraagent.experience.LlmExperienceExtractor;
+import com.felix.miraagent.experience.ReviewPolicy;
 import com.felix.miraagent.memory.SerializedMemoryWriter;
 import com.felix.miraagent.model.ModelClient;
 import com.felix.miraagent.skill.SkillManager;
@@ -28,5 +30,17 @@ public class ExperienceConfig {
     public ExperienceApplier experienceApplier(Optional<SerializedMemoryWriter> memoryWriter,
                                                Optional<SkillManager> skillManager) {
         return new ExperienceApplier(memoryWriter.orElse(null), skillManager.orElse(null));
+    }
+
+    @Bean
+    public ReviewPolicy reviewPolicy() {
+        return new ReviewPolicy();
+    }
+
+    @Bean
+    public BackgroundReview backgroundReview(ReviewPolicy reviewPolicy,
+                                             ExperienceExtractor experienceExtractor,
+                                             ExperienceApplier experienceApplier) {
+        return new BackgroundReview(reviewPolicy, experienceExtractor, experienceApplier);
     }
 }

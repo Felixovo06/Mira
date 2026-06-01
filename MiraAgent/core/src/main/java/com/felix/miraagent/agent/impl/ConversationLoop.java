@@ -2,6 +2,10 @@ package com.felix.miraagent.agent.impl;
 
 import com.felix.miraagent.agent.*;
 import com.felix.miraagent.agent.compression.*;
+import com.felix.miraagent.experience.BackgroundReview;
+import com.felix.miraagent.experience.ReviewContext;
+import com.felix.miraagent.experience.ReviewResult;
+import com.felix.miraagent.experience.ReviewSignals;
 import com.felix.miraagent.memory.MemoryRetriever;
 import com.felix.miraagent.memory.MemoryStore;
 import com.felix.miraagent.memory.SerializedMemoryWriter;
@@ -57,6 +61,7 @@ public class ConversationLoop {
     private final CompressionPolicy compressionPolicy;
     private final String summaryBaseDir;
     private final SkillIndexInjector skillIndexInjector;
+    private final BackgroundReview backgroundReview;
 
     public ConversationLoop(ModelClient modelClient, PromptBuilder promptBuilder,
                             ToolRegistry toolRegistry, ToolDispatcher toolDispatcher,
@@ -131,6 +136,21 @@ public class ConversationLoop {
                             ToolResultCache toolResultCache,
                             ContextCompressor compressor, CompressionPolicy compressionPolicy,
                             String summaryBaseDir, SkillIndexInjector skillIndexInjector) {
+        this(modelClient, promptBuilder, toolRegistry, toolDispatcher, sessionStore, traceStore,
+                toolExecutionStore, memoryStore, memoryRetriever, memoryWriter, toolResultCache,
+                compressor, compressionPolicy, summaryBaseDir, skillIndexInjector, null);
+    }
+
+    public ConversationLoop(ModelClient modelClient, PromptBuilder promptBuilder,
+                            ToolRegistry toolRegistry, ToolDispatcher toolDispatcher,
+                            SessionStore sessionStore, TraceStore traceStore,
+                            ToolExecutionStore toolExecutionStore,
+                            MemoryStore memoryStore, MemoryRetriever memoryRetriever,
+                            SerializedMemoryWriter memoryWriter,
+                            ToolResultCache toolResultCache,
+                            ContextCompressor compressor, CompressionPolicy compressionPolicy,
+                            String summaryBaseDir, SkillIndexInjector skillIndexInjector,
+                            BackgroundReview backgroundReview) {
         this.modelClient = modelClient;
         this.promptBuilder = promptBuilder;
         this.toolRegistry = toolRegistry;
@@ -146,6 +166,7 @@ public class ConversationLoop {
         this.compressionPolicy = compressionPolicy;
         this.summaryBaseDir = summaryBaseDir;
         this.skillIndexInjector = skillIndexInjector;
+        this.backgroundReview = backgroundReview;
     }
 
     public RunResult run(AgentRunRequest request) {
@@ -388,6 +409,9 @@ public class ConversationLoop {
             emitTrace(request, runId, sessionId, stepIndex++, TraceEventType.SESSION_PERSISTED, Map.of());
             streamDone(request, response.getFinishReason());
 
+            // 主回复已返回，异步触发 Background Review（门控不满足则不开线程），不阻塞用户
+            triggerBackgroundReview(request, runId, sessionId, conversationHistory, toolCallCount);
+
             return RunResult.builder()
                     .runId(runId).sessionId(sessionId)
                     .status(RunStatus.SUCCESS)
@@ -395,6 +419,74 @@ public class ConversationLoop {
                     .toolExecutions(allToolResults)
                     .build();
         }
+    }
+
+    private void triggerBackgroundReview(AgentRunRequest request, String runId, String sessionId,
+                                         List<Message> conversationHistory, int toolCallCount) {
+        if (backgroundReview == null) {
+            return;
+        }
+        try {
+            int userTurns = 0;
+            String latestUserText = "";
+            for (Message m : conversationHistory) {
+                if (m.getRole() == MessageRole.USER && parseSummaryMarker(m) == null) {
+                    userTurns++;
+                    if (m.getContent() != null) {
+                        latestUserText = m.getContent();
+                    }
+                }
+            }
+            ReviewSignals signals = ReviewSignals.builder()
+                    .toolCallCount(toolCallCount)
+                    .turnCount(userTurns)
+                    .userMessageText(latestUserText)
+                    .build();
+            ReviewContext ctx = ReviewContext.builder()
+                    .userId(request.getUserId())
+                    .characterId(request.getCharacterProfile() != null ? request.getCharacterProfile().getId() : null)
+                    .sessionId(sessionId)
+                    .sourceTraceId(runId)
+                    .transcript(renderTranscript(conversationHistory))
+                    .signals(signals)
+                    .build();
+            backgroundReview.reviewAsync(ctx, result -> recordReviewTrace(runId, sessionId, result));
+        } catch (Exception e) {
+            log.warn("Failed to trigger background review runId={}", runId, e);
+        }
+    }
+
+    private void recordReviewTrace(String runId, String sessionId, ReviewResult result) {
+        if (result == null || !result.isTriggered()) {
+            return;
+        }
+        // 后台线程只落 trace，不推流（主回复流已结束）
+        traceStore.record(TraceEvent.builder()
+                .id(UUID.randomUUID().toString())
+                .runId(runId).sessionId(sessionId)
+                .stepIndex(0)
+                .eventType(TraceEventType.BACKGROUND_REVIEW_FINISHED)
+                .payload(Map.of(
+                        "review_triggered_by", result.getTriggeredBy() != null ? result.getTriggeredBy() : "",
+                        "memoryWrites", result.getMemoriesWritten(),
+                        "skillWrites", result.getSkillsWritten()))
+                .build());
+    }
+
+    private String renderTranscript(List<Message> history) {
+        StringBuilder sb = new StringBuilder();
+        for (Message msg : history) {
+            String role = switch (msg.getRole()) {
+                case USER -> "[USER]";
+                case ASSISTANT -> "[ASSISTANT]";
+                case TOOL -> "[TOOL]";
+                case SYSTEM -> "[SYSTEM]";
+            };
+            String content = msg.getContent() != null ? msg.getContent() : "";
+            sb.append(role).append(": ").append(content).append("\n");
+        }
+        String text = sb.toString();
+        return text.length() > 8000 ? text.substring(text.length() - 8000) : text;
     }
 
     private void emitTrace(AgentRunRequest request, String runId, String sessionId, int stepIndex,

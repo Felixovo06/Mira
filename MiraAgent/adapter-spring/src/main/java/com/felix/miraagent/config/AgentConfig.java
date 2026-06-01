@@ -8,6 +8,7 @@ import com.felix.miraagent.agent.compression.ContextCompressor;
 import com.felix.miraagent.agent.compression.SummaryProperties;
 import com.felix.miraagent.agent.compression.impl.DefaultContextCompressor;
 import com.felix.miraagent.agent.impl.ConversationLoop;
+import com.felix.miraagent.experience.BackgroundReview;
 import com.felix.miraagent.agent.impl.DefaultAgentRuntime;
 import com.felix.miraagent.memory.MemoryRetriever;
 import com.felix.miraagent.memory.MemoryStore;
@@ -125,7 +126,8 @@ public class AgentConfig {
                                              Optional<ToolResultCache> toolResultCache,
                                              Optional<ContextCompressor> compressor,
                                              SummaryProperties summaryProperties,
-                                             Optional<SkillIndexInjector> skillIndexInjector) {
+                                             Optional<SkillIndexInjector> skillIndexInjector,
+                                             Optional<BackgroundReview> backgroundReview) {
         return new ConversationLoop(modelClient, promptBuilder, toolRegistry, toolDispatcher,
                 sessionStore, traceStore, toolExecutionStore,
                 memoryStore.orElse(null), memoryRetriever.orElse(null),
@@ -133,7 +135,8 @@ public class AgentConfig {
                 toolResultCache.orElse(null),
                 compressor.orElse(null), CompressionPolicy.defaultPolicy(),
                 summaryProperties.getBaseDir(),
-                skillIndexInjector.orElse(null));
+                skillIndexInjector.orElse(null),
+                backgroundReview.orElse(null));
     }
 
     @Bean
