@@ -3,6 +3,10 @@ package com.felix.miraagent.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.felix.miraagent.agent.ModelConfig;
 import com.felix.miraagent.agent.AgentRuntime;
+import com.felix.miraagent.agent.compression.CompressionPolicy;
+import com.felix.miraagent.agent.compression.ContextCompressor;
+import com.felix.miraagent.agent.compression.SummaryProperties;
+import com.felix.miraagent.agent.compression.impl.DefaultContextCompressor;
 import com.felix.miraagent.agent.impl.ConversationLoop;
 import com.felix.miraagent.agent.impl.DefaultAgentRuntime;
 import com.felix.miraagent.memory.MemoryRetriever;
@@ -34,7 +38,7 @@ import org.springframework.context.annotation.Configuration;
 import java.util.Optional;
 
 @Configuration
-@EnableConfigurationProperties(ArtifactProperties.class)
+@EnableConfigurationProperties({ArtifactProperties.class, SummaryProperties.class})
 public class AgentConfig {
 
     @Bean
@@ -83,17 +87,24 @@ public class AgentConfig {
     }
 
     @Bean
+    public ContextCompressor contextCompressor(SummaryProperties summaryProperties, ObjectMapper objectMapper) {
+        return new DefaultContextCompressor(summaryProperties.getBaseDir(), objectMapper);
+    }
+
+    @Bean
     public ConversationLoop conversationLoop(ModelClient modelClient, PromptBuilder promptBuilder,
                                              ToolRegistry toolRegistry, ToolDispatcher toolDispatcher,
                                              SessionStore sessionStore, TraceStore traceStore,
                                              ToolExecutionStore toolExecutionStore,
                                              Optional<MemoryStore> memoryStore,
                                              Optional<MemoryRetriever> memoryRetriever,
-                                             Optional<ToolResultCache> toolResultCache) {
+                                             Optional<ToolResultCache> toolResultCache,
+                                             Optional<ContextCompressor> compressor) {
         return new ConversationLoop(modelClient, promptBuilder, toolRegistry, toolDispatcher,
                 sessionStore, traceStore, toolExecutionStore,
                 memoryStore.orElse(null), memoryRetriever.orElse(null),
-                toolResultCache.orElse(null));
+                toolResultCache.orElse(null),
+                compressor.orElse(null), CompressionPolicy.defaultPolicy());
     }
 
     @Bean

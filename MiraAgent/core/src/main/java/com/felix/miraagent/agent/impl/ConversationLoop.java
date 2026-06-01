@@ -1,6 +1,7 @@
 package com.felix.miraagent.agent.impl;
 
 import com.felix.miraagent.agent.*;
+import com.felix.miraagent.agent.compression.*;
 import com.felix.miraagent.memory.MemoryRetriever;
 import com.felix.miraagent.memory.MemoryStore;
 import com.felix.miraagent.model.*;
@@ -40,6 +41,8 @@ public class ConversationLoop {
     private final MemoryStore memoryStore;
     private final MemoryRetriever memoryRetriever;
     private final ToolResultCache toolResultCache;
+    private final ContextCompressor compressor;
+    private final CompressionPolicy compressionPolicy;
 
     public ConversationLoop(ModelClient modelClient, PromptBuilder promptBuilder,
                             ToolRegistry toolRegistry, ToolDispatcher toolDispatcher,
@@ -64,6 +67,17 @@ public class ConversationLoop {
                             ToolExecutionStore toolExecutionStore,
                             MemoryStore memoryStore, MemoryRetriever memoryRetriever,
                             ToolResultCache toolResultCache) {
+        this(modelClient, promptBuilder, toolRegistry, toolDispatcher, sessionStore, traceStore,
+                toolExecutionStore, memoryStore, memoryRetriever, toolResultCache, null, null);
+    }
+
+    public ConversationLoop(ModelClient modelClient, PromptBuilder promptBuilder,
+                            ToolRegistry toolRegistry, ToolDispatcher toolDispatcher,
+                            SessionStore sessionStore, TraceStore traceStore,
+                            ToolExecutionStore toolExecutionStore,
+                            MemoryStore memoryStore, MemoryRetriever memoryRetriever,
+                            ToolResultCache toolResultCache,
+                            ContextCompressor compressor, CompressionPolicy compressionPolicy) {
         this.modelClient = modelClient;
         this.promptBuilder = promptBuilder;
         this.toolRegistry = toolRegistry;
@@ -74,6 +88,8 @@ public class ConversationLoop {
         this.memoryStore = memoryStore;
         this.memoryRetriever = memoryRetriever;
         this.toolResultCache = toolResultCache;
+        this.compressor = compressor;
+        this.compressionPolicy = compressionPolicy;
     }
 
     public RunResult run(AgentRunRequest request) {
@@ -276,6 +292,20 @@ public class ConversationLoop {
                         .content("")
                         .build();
             }
+
+            if (compressor != null && compressor.shouldCompress(lastRealInputTokens, compressionPolicy)) {
+                CompressResult cr = compressor.compress(
+                        conversationHistory, sessionId, request.getUserId(),
+                        request.getCharacterProfile() != null ? request.getCharacterProfile().getId() : null,
+                        compressionPolicy, modelClient, memoryStore
+                );
+                if (cr.isCompressed()) {
+                    emitTrace(request, runId, sessionId, stepIndex++, TraceEventType.CONTEXT_COMPRESSED,
+                            Map.of("checkpointId", cr.getSummary().getCheckpointId(),
+                                    "memoryWrites", cr.getSummary().getMemoryWrites().size()));
+                }
+            }
+
             sessionStore.appendMessage(sessionId, finalMsg);
             sessionStore.updateLastMessageAt(sessionId);
 
