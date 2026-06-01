@@ -18,6 +18,27 @@ mira:
     temperature: ${MIRA_MODEL_TEMPERATURE:0.7}
     max-tokens: ${MIRA_MODEL_MAX_TOKENS:2048}
 
+  # MCP 接入（默认关闭）。enabled=true 后，启动时连接各 server 并把工具桥接进统一 ToolRegistry，
+  # 复用同一套权限/trace/artifact 管理。示例自带 server：scripts/mcp/echo_mcp_server.py。
+  # mcp:
+  #   enabled: true
+  #   servers:
+  #     - id: demo
+  #       type: stdio
+  #       command: python3
+  #       args: [ "scripts/mcp/echo_mcp_server.py" ]
+  #       tool-risk-level: low
+  #     # 官方 server 示例（需联网拉取）：
+  #     - id: filesystem
+  #       type: stdio
+  #       command: npx
+  #       args: [ "-y", "@modelcontextprotocol/server-filesystem", "/tmp" ]
+  #       tool-risk-level: medium
+  #     # HTTP server 示例：
+  #     - id: remote
+  #       type: http
+  #       url: http://localhost:9000/mcp
+
 logging:
   level:
     com.felix.miraagent: DEBUG
