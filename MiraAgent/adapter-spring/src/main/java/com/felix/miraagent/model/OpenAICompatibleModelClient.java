@@ -62,6 +62,8 @@ public class OpenAICompatibleModelClient implements ModelClient {
     public StreamHandle streamChat(ChatRequest request, StreamCallback callback) {
         var body = buildRequestBody(request);
         body.put("stream", true);
+        // OpenAI 兼容接口需显式开启才会在流末尾发 usage chunk，否则 token 计数为 0
+        body.put("stream_options", Map.of("include_usage", true));
 
         var aborted = new AtomicBoolean(false);
         var future = new CompletableFuture<ChatResponse>();
@@ -279,6 +281,13 @@ public class OpenAICompatibleModelClient implements ModelClient {
 
     private void handleStreamPayload(String payload, StreamAccumulator accumulator, StreamCallback callback) throws Exception {
         JsonNode root = objectMapper.readTree(payload);
+
+        // usage 先解析：include_usage 时末尾 chunk choices 为空但携带 usage，不能因空 choices 提前 return
+        JsonNode usage = root.path("usage");
+        if (!usage.isMissingNode() && !usage.isNull()) {
+            accumulator.setUsage(usage.path("prompt_tokens").asInt(0), usage.path("completion_tokens").asInt(0));
+        }
+
         JsonNode choice = root.path("choices").isArray() && !root.path("choices").isEmpty()
                 ? root.path("choices").get(0) : null;
         if (choice == null || choice.isMissingNode()) {
@@ -303,11 +312,6 @@ public class OpenAICompatibleModelClient implements ModelClient {
         JsonNode finishReason = choice.path("finish_reason");
         if (!finishReason.isMissingNode() && !finishReason.isNull()) {
             accumulator.setFinishReason(finishReason.asText());
-        }
-
-        JsonNode usage = root.path("usage");
-        if (!usage.isMissingNode() && !usage.isNull()) {
-            accumulator.setUsage(usage.path("prompt_tokens").asInt(0), usage.path("completion_tokens").asInt(0));
         }
     }
 

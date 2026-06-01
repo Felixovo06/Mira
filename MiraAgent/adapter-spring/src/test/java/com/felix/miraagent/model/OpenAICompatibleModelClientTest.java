@@ -108,6 +108,44 @@ class OpenAICompatibleModelClientTest {
         assertEquals("tool_calls", response.getFinishReason());
     }
 
+    @Test
+    void streamChatParsesUsageFromFinalEmptyChoicesChunk() throws IOException {
+        // include_usage 时末尾 chunk choices 为空但携带 usage，不能因空 choices 提前 return
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/chat/completions", exchange -> {
+            String body = """
+                    data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":null}]}
+
+                    data: {"choices":[{"delta":{},"finish_reason":"stop"}]}
+
+                    data: {"choices":[],"usage":{"prompt_tokens":123,"completion_tokens":45}}
+
+                    data: [DONE]
+
+                    """;
+            sendSse(exchange, body);
+        });
+        server.start();
+
+        ModelProperties props = new ModelProperties();
+        props.setBaseUrl("http://localhost:" + server.getAddress().getPort());
+        props.setApiKey("test-key");
+        props.setName("test-model");
+        OpenAICompatibleModelClient client = new OpenAICompatibleModelClient(
+                RestClient.builder().baseUrl(props.getBaseUrl()).build(), props, new ObjectMapper());
+
+        ChatResponse response = client.streamChat(
+                ChatRequest.builder()
+                        .message(Message.builder().role(MessageRole.USER).content("hi").build())
+                        .build(),
+                delta -> { }).await();
+
+        assertEquals("Hi", response.getAssistantMessage().getContent());
+        assertNotNull(response.getUsage(), "末尾 usage chunk 应被解析");
+        assertEquals(123, response.getUsage().getInputTokens());
+        assertEquals(45, response.getUsage().getOutputTokens());
+    }
+
     private void sendSse(com.sun.net.httpserver.HttpExchange exchange, String body) throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
