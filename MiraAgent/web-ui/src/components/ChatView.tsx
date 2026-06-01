@@ -272,6 +272,8 @@ export default function ChatView({ sessionId, userId }: Props) {
             {messages.map((m) => {
               if (m.role === 'tool') return <ToolChip key={m.id} name={m.toolName ?? 'tool'} content={m.content} />
               if (m.role === 'system') return null
+              // 只带工具调用、无文字的 assistant 轮次不渲染空气泡（工具 chip 已表达该轮）
+              if (m.role === 'assistant' && !(m.content && m.content.trim())) return null
               return <MessageBubble key={m.id} role={m.role} content={m.content ?? ''} />
             })}
             {streaming && (
