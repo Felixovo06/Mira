@@ -59,7 +59,6 @@ public class EvalRunner {
                 cases.size(), baseUrl, judge.enabled() ? "on" : "off");
 
         ArrayNode caseReports = mapper.createArrayNode();
-        List<RunOutcome> outcomes = new ArrayList<>();
         // Layer3 各维度分数累加
         List<Integer> jRelevance = new ArrayList<>();
         List<Integer> jPersona = new ArrayList<>();
@@ -81,7 +80,6 @@ public class EvalRunner {
 
         for (EvalCase c : cases) {
             RunOutcome o = client.run(c);
-            outcomes.add(o);
             ObjectNode cr = mapper.createObjectNode();
             cr.put("id", c.id());
             cr.put("category", c.category());
