@@ -83,4 +83,19 @@ public class SkillConfig {
                                      SkillUsageTracker skillUsageTracker) {
         return new DefaultSkillManager(serializedSkillWriter, skillLoader, skillUsageTracker);
     }
+
+    @Bean
+    public com.felix.miraagent.skill.curator.SkillSimilarityFinder skillSimilarityFinder(
+            Optional<JdbcTemplate> jdbcTemplate) {
+        return jdbcTemplate.<com.felix.miraagent.skill.curator.SkillSimilarityFinder>
+                        map(EmbeddingSkillSimilarityFinder::new)
+                .orElseGet(com.felix.miraagent.skill.curator.NoOpSkillSimilarityFinder::new);
+    }
+
+    @Bean
+    public com.felix.miraagent.skill.curator.Curator curator(
+            SkillLoader skillLoader,
+            com.felix.miraagent.skill.curator.SkillSimilarityFinder skillSimilarityFinder) {
+        return new com.felix.miraagent.skill.curator.DefaultCurator(skillLoader, skillSimilarityFinder);
+    }
 }
