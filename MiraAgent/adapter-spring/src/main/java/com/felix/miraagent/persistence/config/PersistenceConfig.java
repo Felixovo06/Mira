@@ -1,11 +1,15 @@
 package com.felix.miraagent.persistence.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.felix.miraagent.persistence.jdbc.JdbcSessionSearchService;
-import com.felix.miraagent.persistence.jdbc.JdbcSessionStore;
-import com.felix.miraagent.persistence.jdbc.JdbcTraceStore;
-import com.felix.miraagent.persistence.jdbc.JdbcToolExecutionStore;
 import com.felix.miraagent.config.UsableDataSourceCondition;
+import com.felix.miraagent.persistence.jdbc.JdbcSessionSearchService;
+import com.felix.miraagent.persistence.mapper.AgentTraceMapper;
+import com.felix.miraagent.persistence.mapper.MessageMapper;
+import com.felix.miraagent.persistence.mapper.SessionMapper;
+import com.felix.miraagent.persistence.mapper.ToolExecutionMapper;
+import com.felix.miraagent.persistence.mybatis.MybatisSessionStore;
+import com.felix.miraagent.persistence.mybatis.MybatisToolExecutionStore;
+import com.felix.miraagent.persistence.mybatis.MybatisTraceStore;
 import com.felix.miraagent.session.SessionSearchService;
 import com.felix.miraagent.session.SessionStore;
 import com.felix.miraagent.session.impl.InMemorySessionStore;
@@ -18,44 +22,43 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+/**
+ * 端口装配: 有可用 DataSource 时 Mapper 被注册(见 MapperScanConfig), 走 MyBatis-Plus 实现;
+ * 否则 Mapper 不存在, 回退到 InMemory 实现。core 始终只依赖端口接口。
+ */
 @Configuration
 public class PersistenceConfig {
 
     @Bean
     @Primary
-    public SessionStore sessionStore(ObjectProvider<JdbcTemplate> jdbcTemplateProvider,
-                                     ObjectMapper objectMapper,
-                                     Environment environment) {
-        JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
-        return jdbcTemplate != null
-                && hasUsableDatasourceUrl(environment)
-                ? new JdbcSessionStore(jdbcTemplate, objectMapper)
+    public SessionStore sessionStore(ObjectProvider<SessionMapper> sessionMapperProvider,
+                                     ObjectProvider<MessageMapper> messageMapperProvider,
+                                     ObjectMapper objectMapper) {
+        SessionMapper sessionMapper = sessionMapperProvider.getIfAvailable();
+        MessageMapper messageMapper = messageMapperProvider.getIfAvailable();
+        return (sessionMapper != null && messageMapper != null)
+                ? new MybatisSessionStore(sessionMapper, messageMapper, objectMapper)
                 : new InMemorySessionStore();
     }
 
     @Bean
     @Primary
-    public TraceStore traceStore(ObjectProvider<JdbcTemplate> jdbcTemplateProvider,
-                                 ObjectMapper objectMapper,
-                                 Environment environment) {
-        JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
-        return jdbcTemplate != null
-                && hasUsableDatasourceUrl(environment)
-                ? new JdbcTraceStore(jdbcTemplate, objectMapper)
+    public TraceStore traceStore(ObjectProvider<AgentTraceMapper> traceMapperProvider,
+                                 ObjectMapper objectMapper) {
+        AgentTraceMapper traceMapper = traceMapperProvider.getIfAvailable();
+        return traceMapper != null
+                ? new MybatisTraceStore(traceMapper, objectMapper)
                 : new InMemoryTraceStore();
     }
 
     @Bean
     @Primary
-    public ToolExecutionStore toolExecutionStore(ObjectProvider<JdbcTemplate> jdbcTemplateProvider,
-                                                 Environment environment) {
-        JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
-        return jdbcTemplate != null
-                && hasUsableDatasourceUrl(environment)
-                ? new JdbcToolExecutionStore(jdbcTemplate)
+    public ToolExecutionStore toolExecutionStore(ObjectProvider<ToolExecutionMapper> toolExecutionMapperProvider) {
+        ToolExecutionMapper toolExecutionMapper = toolExecutionMapperProvider.getIfAvailable();
+        return toolExecutionMapper != null
+                ? new MybatisToolExecutionStore(toolExecutionMapper)
                 : new InMemoryToolExecutionStore();
     }
 
@@ -63,14 +66,5 @@ public class PersistenceConfig {
     @Conditional(UsableDataSourceCondition.class)
     public SessionSearchService sessionSearchService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
         return new JdbcSessionSearchService(jdbcTemplate, objectMapper);
-    }
-
-    private boolean hasUsableDatasourceUrl(Environment environment) {
-        try {
-            String url = environment.getProperty("spring.datasource.url");
-            return url != null && !url.isBlank() && !url.contains("${");
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
     }
 }
