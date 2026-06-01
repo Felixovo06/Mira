@@ -402,6 +402,7 @@ public class ConversationLoop {
             }
 
             sessionStore.appendMessage(sessionId, finalMsg);
+            conversationHistory.add(finalMsg);
             sessionStore.updateLastMessageAt(sessionId);
 
             emitTrace(request, runId, sessionId, stepIndex++, TraceEventType.FINAL_RESPONSE,

@@ -25,7 +25,7 @@ class SkillToolHandlersTest {
     private final ObjectMapper mapper = new ObjectMapper();
 
     static class FakeManager implements SkillManager {
-        SkillCreateCommand created; SkillPatch patched; String archived; String viewed;
+        SkillCreateCommand created; SkillPatch patched; String archived; String viewed; String used;
         @Override public SkillWriteResult create(SkillCreateCommand c) {
             created = c; return SkillWriteResult.builder().skillId("code-review").success(true).build();
         }
@@ -44,7 +44,7 @@ class SkillToolHandlersTest {
             return Optional.of(Skill.builder().metadata(SkillMetadata.builder().skillId(id).build())
                     .content(SkillContent.of(id, "d", "完整步骤")).build());
         }
-        @Override public void recordUse(String id, String t, String s) { }
+        @Override public void recordUse(String id, String t, String s) { used = id; }
     }
 
     private JsonNode json(String s) throws Exception { return mapper.readTree(s); }
@@ -66,6 +66,7 @@ class SkillToolHandlersTest {
         assertEquals(ToolStatus.SUCCESS, r.getStatus());
         assertTrue(r.getModelVisibleContent().contains("完整步骤"));
         assertEquals("code-review", mgr.viewed);
+        assertEquals("code-review", mgr.used);
     }
 
     @Test

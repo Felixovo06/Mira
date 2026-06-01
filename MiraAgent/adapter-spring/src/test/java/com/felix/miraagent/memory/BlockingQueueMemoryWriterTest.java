@@ -29,6 +29,7 @@ class BlockingQueueMemoryWriterTest {
                     .category(MemoryCategory.PREFERENCE)
                     .content("喜欢喝乌龙茶")
                     .sourceSessionId("s1")
+                    .confidence(60)
                     .build());
 
             assertTrue(result.isSuccess());
@@ -41,6 +42,7 @@ class BlockingQueueMemoryWriterTest {
             assertEquals(MemoryCategory.PREFERENCE, index.getCategory());
             assertEquals("喜欢喝乌龙茶", index.getContentPreview());
             assertEquals("s1", index.getSourceSessionId());
+            assertEquals(60, index.getConfidence());
         } finally {
             writer.shutdown();
         }

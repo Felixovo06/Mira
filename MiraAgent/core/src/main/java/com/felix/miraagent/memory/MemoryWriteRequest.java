@@ -15,5 +15,7 @@ public class MemoryWriteRequest {
     String sourceSessionId;
     String sourceMessageId;
     String sourceTraceId;
+    @Builder.Default
+    int confidence = 80;
     boolean archived;
 }

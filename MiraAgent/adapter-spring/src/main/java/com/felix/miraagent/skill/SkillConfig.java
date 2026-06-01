@@ -39,8 +39,9 @@ public class SkillConfig {
     }
 
     @Bean
-    public SkillUsageTracker skillUsageTracker(SkillStore skillStore) {
-        return new DefaultSkillUsageTracker(skillStore);
+    public SkillUsageTracker skillUsageTracker(SkillStore skillStore,
+                                               java.util.Optional<SkillIndexRepository> skillIndexRepository) {
+        return new DefaultSkillUsageTracker(skillStore, skillIndexRepository.orElse(null));
     }
 
     @Bean

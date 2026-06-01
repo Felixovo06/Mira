@@ -131,7 +131,7 @@ public class BlockingQueueMemoryWriter implements SerializedMemoryWriter {
                 .category(request.getCategory())
                 .contentPreview(preview(request.getContent()))
                 .sourceUri(result.getFilePath())
-                .confidence(80)
+                .confidence(request.getConfidence())
                 .sourceSessionId(request.getSourceSessionId())
                 .sourceMessageId(request.getSourceMessageId())
                 .retrievalTerms(tokenize(request.getContent()))

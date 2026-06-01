@@ -55,6 +55,7 @@ public class SkillViewToolHandler implements ToolHandler {
             if (skill.isEmpty() || skill.get().getContent() == null) {
                 return ToolExecutionResult.success(toolCallId, "skill_view", "Skill not found: " + skillId);
             }
+            skillManager.recordUse(skillId, traceId, sessionId);
             String raw = skill.get().getContent().getRaw();
             return ToolExecutionResult.success(toolCallId, "skill_view",
                     raw != null ? raw : skill.get().getContent().getBody());

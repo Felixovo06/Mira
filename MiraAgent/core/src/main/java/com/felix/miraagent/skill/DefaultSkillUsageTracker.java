@@ -11,9 +11,15 @@ import java.util.Optional;
 public class DefaultSkillUsageTracker implements SkillUsageTracker {
 
     private final SkillStore skillStore;
+    private final SkillIndexRepository skillIndexRepository; // nullable
 
     public DefaultSkillUsageTracker(SkillStore skillStore) {
+        this(skillStore, null);
+    }
+
+    public DefaultSkillUsageTracker(SkillStore skillStore, SkillIndexRepository skillIndexRepository) {
         this.skillStore = skillStore;
+        this.skillIndexRepository = skillIndexRepository;
     }
 
     @Override
@@ -29,7 +35,14 @@ public class DefaultSkillUsageTracker implements SkillUsageTracker {
         SkillMetadata updated = apply(loaded.get(), event.getType(), at);
         skillStore.saveMetadata(updated);
         skillStore.appendHistory(event.getSkillId(), event);
+        updateIndex(updated);
         return Optional.of(updated);
+    }
+
+    private void updateIndex(SkillMetadata metadata) {
+        if (skillIndexRepository != null) {
+            skillIndexRepository.save(SkillIndex.fromMetadata(metadata));
+        }
     }
 
     private SkillMetadata apply(SkillMetadata m, SkillUsageEventType type, Instant at) {

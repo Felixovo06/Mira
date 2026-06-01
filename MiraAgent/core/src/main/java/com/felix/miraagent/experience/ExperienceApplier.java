@@ -49,6 +49,7 @@ public class ExperienceApplier {
                             .content(plan.getContent())
                             .sourceSessionId(request.getSessionId())
                             .sourceTraceId(plan.getSourceTraceId())
+                            .confidence(toConfidencePercent(plan.getConfidence()))
                             .build());
                     memories++;
                 } catch (Exception e) {
@@ -101,6 +102,13 @@ public class ExperienceApplier {
             case "relationship" -> MemoryCategory.RELATIONSHIP;
             default -> MemoryCategory.EVENT; // fact / tool_experience / 其它
         };
+    }
+
+    private int toConfidencePercent(double confidence) {
+        if (confidence <= 0) {
+            return 80;
+        }
+        return Math.max(0, Math.min(100, (int) Math.round(confidence * 100)));
     }
 
     private String renderBody(SkillWritePlan plan) {

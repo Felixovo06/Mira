@@ -32,8 +32,10 @@ class ConversationLoopReviewTest {
 
     static class CountingExtractor implements ExperienceExtractor {
         final AtomicInteger calls = new AtomicInteger();
+        volatile ExperienceReviewRequest lastRequest;
         @Override public ExperienceReviewResult extract(ExperienceReviewRequest request) {
             calls.incrementAndGet();
+            lastRequest = request;
             return ExperienceReviewResult.nothing();
         }
     }
@@ -82,6 +84,8 @@ class ConversationLoopReviewTest {
         }
         assertTrue(found, "expected BACKGROUND_REVIEW_FINISHED trace");
         assertEquals(1, extractor.calls.get());
+        assertNotNull(extractor.lastRequest);
+        assertTrue(extractor.lastRequest.getTranscript().contains("[ASSISTANT]: 好的~"));
     }
 
     @Test

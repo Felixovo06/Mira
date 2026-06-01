@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -83,5 +84,29 @@ class SkillUsageTrackerTest {
     @Test
     void recordOnMissingSkillReturnsEmpty() {
         assertTrue(tracker.recordUse("nope", "t", "s").isEmpty());
+    }
+
+    @Test
+    void usageUpdatesIndexRepositoryWhenPresent() {
+        var repo = new CapturingSkillIndexRepository();
+        var indexedTracker = new DefaultSkillUsageTracker(store, repo);
+
+        indexedTracker.recordUse("code-review", "trace-1", "sess-1");
+        assertEquals("code-review", repo.saved.getSkillId());
+        assertEquals(1, repo.saved.getUseCount());
+        assertNotNull(repo.saved.getLastUsedAt());
+
+        indexedTracker.setPinned("code-review", true);
+        assertTrue(repo.saved.isPinned());
+    }
+
+    private static class CapturingSkillIndexRepository implements SkillIndexRepository {
+        SkillIndex saved;
+
+        @Override public void save(SkillIndex index) { saved = index; }
+        @Override public void archive(String skillId) { }
+        @Override public List<SkillIndex> findActive() { return saved == null ? List.of() : List.of(saved); }
+        @Override public Optional<SkillIndex> findById(String skillId) { return Optional.ofNullable(saved); }
+        @Override public void deleteAll() { saved = null; }
     }
 }

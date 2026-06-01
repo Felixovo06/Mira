@@ -70,6 +70,7 @@ class ExperienceApplierTest {
 
         assertEquals(MemoryCategory.PREFERENCE, mem.submitted.get(0).getCategory());
         assertEquals("trace-1", mem.submitted.get(0).getSourceTraceId());
+        assertEquals(60, mem.submitted.get(0).getConfidence());
         assertNotNull(skills.created);
         assertEquals("复习计划", skills.created.getName());
         assertEquals("background_review", skills.created.getSource());
