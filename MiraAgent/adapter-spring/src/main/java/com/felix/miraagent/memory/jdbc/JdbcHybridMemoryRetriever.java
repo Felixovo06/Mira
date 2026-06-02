@@ -34,9 +34,9 @@ public class JdbcHybridMemoryRetriever implements MemoryRetriever {
     private static final double VECTOR_WEIGHT = 3.0;
     private static final double LEXICAL_WEIGHT = 1.0;
     // 次级加成:在「相关性」主信号之上做轻微调整,可盖过小幅相关性差距,但不会压过强相关性。
+    // 不做 recency 衰减:长期记忆中旧的稳定事实不应因年龄被压低(否则"10天前的过敏"会被今天的琐事埋掉)。
     private static final double CHAR_BOOST = 0.15;
     private static final double CATEGORY_BOOST = 0.05;
-    private static final double RECENCY_BOOST = 0.02;
 
     private final JdbcMemoryRetriever lexicalRetriever;
     private final EmbeddingClient embeddingClient;
@@ -154,11 +154,6 @@ public class JdbcHybridMemoryRetriever implements MemoryRetriever {
             score += CHAR_BOOST;
         }
         score += CATEGORY_BOOST * categoryWeight(index.getCategory());
-        Instant recency = index.getUpdatedAt() != null ? index.getUpdatedAt() : index.getCreatedAt();
-        if (recency != null) {
-            // 归一到极小区间,仅作近似平局时的轻微新近性倾向
-            score += RECENCY_BOOST * (recency.toEpochMilli() / 1_000_000_000_000_000.0);
-        }
         return score;
     }
 
