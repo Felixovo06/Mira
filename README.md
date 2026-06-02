@@ -146,7 +146,7 @@ Java 21 · Maven 多模块 · Spring Boot 3.5.6 · MyBatis-Plus 3.5.7 · Postgre
 
 ## 🚀 快速开始
 
-> 系统默认 JDK 为 17，需指定 JDK 21。
+> JDK需指定 JDK 21。
 
 ```bash
 # 测试（根 reactor）
