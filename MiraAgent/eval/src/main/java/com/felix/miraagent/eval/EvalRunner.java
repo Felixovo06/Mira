@@ -50,11 +50,15 @@ public class EvalRunner {
         System.out.println("报告已写入: " + Path.of(out).toAbsolutePath());
     }
 
-    /** 核心:跑评测并返回完整报告 ObjectNode(供 CLI 与 REST 复用)。baselinePath 可为 null。 */
+    /** 核心:跑评测并返回完整报告 ObjectNode。Judge 默认从配置装配(CLI 用)。 */
     public ObjectNode buildReport(String baseUrl, String casesRes, String baselinePath) throws Exception {
+        return buildReport(baseUrl, casesRes, baselinePath, LlmJudge.fromConfig());
+    }
+
+    /** 同上,但显式传入 Judge(REST/Dashboard 复用聊天模型凭据)。 */
+    public ObjectNode buildReport(String baseUrl, String casesRes, String baselinePath, LlmJudge judge) throws Exception {
         List<EvalCase> cases = loadCases(casesRes);
         AgentEvalClient client = new AgentEvalClient(baseUrl);
-        LlmJudge judge = LlmJudge.fromConfig();
         System.out.printf("▶ 评测 %d 条用例 → %s (Judge L3: %s)%n",
                 cases.size(), baseUrl, judge.enabled() ? "on" : "off");
 

@@ -40,6 +40,11 @@ public class LlmJudge {
         this.enabled = baseUrl != null && !baseUrl.isBlank() && apiKey != null && !apiKey.isBlank();
     }
 
+    /** 显式装配（如复用聊天模型的凭据）；apiKey 为空则禁用。 */
+    public static LlmJudge of(String baseUrl, String apiKey, String model, int samples) {
+        return new LlmJudge(baseUrl, apiKey, model, samples);
+    }
+
     /** 从系统属性/环境变量装配；无 apiKey 则禁用。 */
     public static LlmJudge fromConfig() {
         String base = prop("eval.judge.baseUrl", "EVAL_JUDGE_BASE_URL");

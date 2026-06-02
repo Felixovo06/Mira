@@ -3,6 +3,8 @@ package com.felix.miraagent.api.controller;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.felix.miraagent.eval.EvalRunner;
+import com.felix.miraagent.eval.LlmJudge;
+import com.felix.miraagent.model.ModelProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,6 +41,12 @@ public class EvalController {
     @Value("${server.port:8080}")
     private int serverPort;
 
+    private final ModelProperties modelProperties;
+
+    public EvalController(ModelProperties modelProperties) {
+        this.modelProperties = modelProperties;
+    }
+
     @PostMapping("/run")
     public ResponseEntity<?> run() {
         if (!running.compareAndSet(false, true)) {
@@ -46,9 +54,12 @@ public class EvalController {
         }
         lastError.set(null);
         String selfUrl = "http://localhost:" + serverPort;
+        // L3 Judge 复用聊天模型的 endpoint/key;dashboard 用单次采样保证响应速度(CLI 可 -Deval.judge.samples=3)
+        LlmJudge judge = LlmJudge.of(modelProperties.getBaseUrl(), modelProperties.getApiKey(),
+                modelProperties.getName(), 1);
         Thread.ofVirtual().start(() -> {
             try {
-                ObjectNode report = new EvalRunner().buildReport(selfUrl, "eval/cases.json", null);
+                ObjectNode report = new EvalRunner().buildReport(selfUrl, "eval/cases.json", null, judge);
                 lastReport.set(report);
             } catch (Exception e) {
                 log.warn("Eval run failed", e);
