@@ -16,6 +16,7 @@ import java.util.Map;
  * @param expectNoTool  是否期望"不调用任何工具"（no-tool 准确率）
  * @param assertContains 最终回复应包含的关键字（轻量事实断言；可空）
  * @param expectReview  是否期望触发"自我改善"后台复盘（null=不评该维度）
+ * @param setup         同会话前置用户消息（先按序发出再发 userMessage，用于多轮记忆测试；可空）
  */
 public record EvalCase(
         String id,
@@ -27,9 +28,14 @@ public record EvalCase(
         Map<String, String> expectedParams,
         Boolean expectNoTool,
         List<String> assertContains,
-        Boolean expectReview) {
+        Boolean expectReview,
+        List<String> setup) {
 
     public boolean expectsNoTool() {
         return Boolean.TRUE.equals(expectNoTool);
+    }
+
+    public List<String> setupMessages() {
+        return setup == null ? List.of() : setup;
     }
 }

@@ -36,8 +36,15 @@ public class AgentEvalClient {
 
     public RunOutcome run(EvalCase c) {
         String sessionId = "eval-" + UUID.randomUUID();
+        String userId = "eval-" + (c.id() != null ? c.id() : "x");
+
+        // 多轮场景:先把前置消息按序发出(同 session),建立上下文,再评最后一条
+        for (String prior : c.setupMessages()) {
+            sendSetup(sessionId, userId, prior, c.enabledTools());
+        }
+
         ObjectNode body = mapper.createObjectNode();
-        body.put("userId", "eval-" + (c.id() != null ? c.id() : "x"));
+        body.put("userId", userId);
         body.put("sessionId", sessionId);
         body.put("content", c.userMessage());
         body.put("stream", true);
@@ -92,6 +99,29 @@ public class AgentEvalClient {
         boolean ok = done[0] && error[0] == null;
         return new RunOutcome(ok, error[0], sessionId, ttft[0] < 0 ? totalMs : ttft[0], totalMs,
                 toolCalls, toolStatuses, usage[0], usage[1], finalContent[0]);
+    }
+
+    /** 发一条前置消息(非流式,忽略结果),用于在同 session 建立多轮上下文。 */
+    private void sendSetup(String sessionId, String userId, String content, List<String> tools) {
+        try {
+            ObjectNode body = mapper.createObjectNode();
+            body.put("userId", userId);
+            body.put("sessionId", sessionId);
+            body.put("content", content);
+            if (tools != null && !tools.isEmpty()) {
+                ArrayNode t = body.putArray("enabledTools");
+                tools.forEach(t::add);
+            }
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/api/chat"))
+                    .timeout(Duration.ofSeconds(120))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
+                    .build();
+            http.send(req, HttpResponse.BodyHandlers.ofString());
+        } catch (Exception ignored) {
+            // 前置消息失败不致命,继续评估目标消息
+        }
     }
 
     /**
