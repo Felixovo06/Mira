@@ -17,6 +17,14 @@ public interface MemoryIndexRepository {
 
     Optional<MemoryIndex> findById(String id);
 
+    /**
+     * 写入前去重用：在同 user + characterId + category 范围内，找出与 content 最相似的未归档记忆。
+     * 仅返回相似度 >= minSimilarity 的最高匹配；characterId 为 null 时仅匹配 character_id 为 null 的记忆。
+     * 不支持相似度查询的实现可返回 {@link Optional#empty()}。
+     */
+    Optional<SimilarMemory> findMostSimilar(String userId, String characterId, MemoryCategory category,
+                                            String content, double minSimilarity);
+
     /** Delete all indexes for a user (used during full rebuild). */
     void deleteAll(String userId);
 }

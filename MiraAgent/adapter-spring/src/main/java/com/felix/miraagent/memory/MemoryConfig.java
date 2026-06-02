@@ -34,11 +34,17 @@ public class MemoryConfig {
     public SerializedMemoryWriter blockingQueueMemoryWriter(MemoryStore memoryStore,
                                                             Optional<MemoryIndexRepository> memoryIndexRepository,
                                                             Optional<AsyncEmbeddingIndexer> asyncEmbeddingIndexer,
-                                                            Optional<MemoryWritePolicy> memoryWritePolicy) {
+                                                            Optional<MemoryWritePolicy> memoryWritePolicy,
+                                                            MemoryProperties memoryProperties) {
+        MemoryProperties.Dedup dedup = memoryProperties.getDedup();
+        // 去重需索引支持；关闭去重时把 exact 阈值置 0 走直通
+        double near = dedup.isEnabled() ? dedup.getNearThreshold() : 0;
+        double exact = dedup.isEnabled() ? dedup.getExactThreshold() : 0;
         return new BlockingQueueMemoryWriter(memoryStore,
                 memoryIndexRepository.orElse(null),
                 asyncEmbeddingIndexer.orElse(null),
-                memoryWritePolicy.orElse(null));
+                memoryWritePolicy.orElse(null),
+                near, exact);
     }
 
     @Bean

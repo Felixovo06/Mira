@@ -7,7 +7,7 @@ import java.time.Instant;
 import java.util.List;
 
 @Value
-@Builder
+@Builder(toBuilder = true)
 public class MemoryIndex {
     String id;
     String userId;

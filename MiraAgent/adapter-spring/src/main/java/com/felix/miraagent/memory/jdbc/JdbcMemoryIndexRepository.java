@@ -6,6 +6,7 @@ import com.felix.miraagent.memory.MemoryCategory;
 import com.felix.miraagent.memory.MemoryIndex;
 import com.felix.miraagent.memory.MemoryIndexRepository;
 import com.felix.miraagent.memory.MemoryScope;
+import com.felix.miraagent.memory.SimilarMemory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -133,6 +134,47 @@ public class JdbcMemoryIndexRepository implements MemoryIndexRepository {
                 from memory_index where id = ?
                 """,
                 memoryIndexRowMapper(), id);
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
+
+    @Override
+    public Optional<SimilarMemory> findMostSimilar(String userId, String characterId, MemoryCategory category,
+                                                   String content, double minSimilarity) {
+        if (content == null || content.isBlank() || category == null) {
+            return Optional.empty();
+        }
+        StringBuilder sql = new StringBuilder("""
+                select id, user_id, character_id, scope, category,
+                       content_preview, source_uri, confidence,
+                       source_session_id, source_message_id,
+                       retrieval_terms, embedding_ref, archived_at,
+                       created_at, updated_at,
+                       similarity(content_preview, ?) as sim
+                from memory_index
+                where user_id = ? and category = ? and archived_at is null
+                  and similarity(content_preview, ?) >= ?
+                """);
+        List<Object> params = new ArrayList<>();
+        params.add(content);            // select similarity(?, ...)
+        params.add(userId);
+        params.add(category.name());
+        params.add(content);            // where similarity(?, ...) >= ?
+        params.add(minSimilarity);
+        if (characterId != null) {
+            sql.append(" and character_id = ?");
+            params.add(characterId);
+        } else {
+            sql.append(" and character_id is null");
+        }
+        sql.append(" order by sim desc limit 1");
+
+        RowMapper<MemoryIndex> mapper = memoryIndexRowMapper();
+        var rows = jdbc.query(sql.toString(),
+                (rs, rowNum) -> SimilarMemory.builder()
+                        .memory(mapper.mapRow(rs, rowNum))
+                        .similarity(rs.getDouble("sim"))
+                        .build(),
+                params.toArray());
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }
 

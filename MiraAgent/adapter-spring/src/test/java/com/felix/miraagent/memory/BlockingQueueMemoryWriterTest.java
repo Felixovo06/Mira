@@ -97,9 +97,16 @@ class BlockingQueueMemoryWriterTest {
     private static class CapturingMemoryIndexRepository implements MemoryIndexRepository {
         private final List<MemoryIndex> saved = new ArrayList<>();
         private String archivedMemoryId;
+        private SimilarMemory similarToReturn;
+
+        void seed(MemoryIndex index) {
+            saved.add(index);
+        }
 
         @Override
         public void save(MemoryIndex index) {
+            // upsert by id 以模拟真实仓库
+            saved.removeIf(i -> i.getId().equals(index.getId()));
             saved.add(index);
         }
 
@@ -119,8 +126,119 @@ class BlockingQueueMemoryWriterTest {
         }
 
         @Override
+        public Optional<SimilarMemory> findMostSimilar(String userId, String characterId, MemoryCategory category,
+                                                       String content, double minSimilarity) {
+            if (similarToReturn != null && similarToReturn.getSimilarity() >= minSimilarity) {
+                return Optional.of(similarToReturn);
+            }
+            return Optional.empty();
+        }
+
+        @Override
         public void deleteAll(String userId) {
             saved.clear();
+        }
+    }
+
+    private static MemoryIndex existingPreference(String id, String content, int confidence) {
+        return MemoryIndex.builder()
+                .id(id)
+                .userId("u1")
+                .scope(MemoryScope.GLOBAL)
+                .category(MemoryCategory.PREFERENCE)
+                .contentPreview(content)
+                .sourceUri("u1/PREFERENCES.md")
+                .confidence(confidence)
+                .build();
+    }
+
+    @Test
+    void exactDuplicateReinforcesWithoutNewCardOrFileAppend() throws Exception {
+        var store = new MemoryFileStore(tempDir.toString());
+        var repo = new CapturingMemoryIndexRepository();
+        repo.seed(existingPreference("mem-existing", "喜欢喝乌龙茶", 60));
+        repo.similarToReturn = SimilarMemory.builder()
+                .memory(repo.saved.get(0)).similarity(0.95).build();
+        var writer = new BlockingQueueMemoryWriter(store, repo, null);
+        try {
+            MemoryWriteResult result = writer.submit(MemoryWriteRequest.builder()
+                    .memoryId("mem-new")
+                    .userId("u1")
+                    .scope(MemoryScope.GLOBAL)
+                    .category(MemoryCategory.PREFERENCE)
+                    .content("喜欢喝乌龙茶")
+                    .confidence(80)
+                    .build());
+
+            assertTrue(result.isSuccess());
+            assertTrue(result.isDeduplicated());
+            assertEquals("mem-existing", result.getMemoryId());
+            // 没有新增卡片，置信度被强化（60 -> 65），内容保持不变
+            assertEquals(1, repo.saved.size());
+            MemoryIndex merged = repo.saved.get(0);
+            assertEquals("mem-existing", merged.getId());
+            assertEquals(65, merged.getConfidence());
+            assertEquals("喜欢喝乌龙茶", merged.getContentPreview());
+            // 文件未被追加
+            assertFalse(Files.exists(tempDir.resolve("u1/PREFERENCES.md")));
+        } finally {
+            writer.shutdown();
+        }
+    }
+
+    @Test
+    void nearDuplicateUpdatesExistingCard() throws Exception {
+        var store = new MemoryFileStore(tempDir.toString());
+        var repo = new CapturingMemoryIndexRepository();
+        repo.seed(existingPreference("mem-existing", "喜欢乌龙茶", 60));
+        repo.similarToReturn = SimilarMemory.builder()
+                .memory(repo.saved.get(0)).similarity(0.7).build();
+        var writer = new BlockingQueueMemoryWriter(store, repo, null);
+        try {
+            MemoryWriteResult result = writer.submit(MemoryWriteRequest.builder()
+                    .memoryId("mem-new")
+                    .userId("u1")
+                    .scope(MemoryScope.GLOBAL)
+                    .category(MemoryCategory.PREFERENCE)
+                    .content("其实更喜欢喝乌龙和普洱")
+                    .confidence(80)
+                    .build());
+
+            assertTrue(result.isDeduplicated());
+            assertEquals(1, repo.saved.size());
+            MemoryIndex merged = repo.saved.get(0);
+            assertEquals("mem-existing", merged.getId());
+            assertEquals(80, merged.getConfidence());
+            assertEquals("其实更喜欢喝乌龙和普洱", merged.getContentPreview());
+            assertFalse(Files.exists(tempDir.resolve("u1/PREFERENCES.md")));
+        } finally {
+            writer.shutdown();
+        }
+    }
+
+    @Test
+    void distinctMemoryWritesNewCardNormally() throws Exception {
+        var store = new MemoryFileStore(tempDir.toString());
+        var repo = new CapturingMemoryIndexRepository();
+        repo.seed(existingPreference("mem-existing", "喜欢喝乌龙茶", 60));
+        // 无相似命中
+        var writer = new BlockingQueueMemoryWriter(store, repo, null);
+        try {
+            MemoryWriteResult result = writer.submit(MemoryWriteRequest.builder()
+                    .memoryId("mem-new")
+                    .userId("u1")
+                    .scope(MemoryScope.GLOBAL)
+                    .category(MemoryCategory.PREFERENCE)
+                    .content("养了一只叫胖橘的猫")
+                    .confidence(80)
+                    .build());
+
+            assertTrue(result.isSuccess());
+            assertFalse(result.isDeduplicated());
+            assertEquals(2, repo.saved.size());
+            assertTrue(Files.readString(tempDir.resolve("u1/PREFERENCES.md")).contains("胖橘"));
+        } finally {
+            writer.shutdown();
         }
     }
 }
