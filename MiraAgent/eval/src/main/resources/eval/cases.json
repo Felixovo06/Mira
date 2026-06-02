@@ -308,5 +308,29 @@
     "category": "self_improve",
     "userMessage": "帮我记住：我女朋友的生日是 5 月 20 号，到时候提醒我。",
     "expectReview": true
+  },
+  {
+    "id": "ltm_crosssession_allergy",
+    "category": "memory_longterm",
+    "userMessage": "我之前跟你说过我对什么过敏来着？",
+    "memorySetup": ["请记住一件事：我对花生过敏，以后给我推荐吃的务必避开花生。"],
+    "enabledTools": ["write_memory", "recall_memory"],
+    "assertContains": ["花生"]
+  },
+  {
+    "id": "ltm_crosssession_pet",
+    "category": "memory_longterm",
+    "userMessage": "我养的那只猫叫什么名字？",
+    "memorySetup": ["跟你说个事儿，我养了一只布偶猫，名字叫汤圆。"],
+    "enabledTools": ["write_memory", "recall_memory"],
+    "assertContains": ["汤圆"]
+  },
+  {
+    "id": "ltm_crosssession_profile",
+    "category": "memory_longterm",
+    "userMessage": "你还记得我住哪个城市、做什么工作吗？",
+    "memorySetup": ["自我介绍一下，我叫阿杰，住在杭州，是一名后端程序员。"],
+    "enabledTools": ["write_memory", "recall_memory"],
+    "assertContains": ["杭州", "程序员"]
   }
 ]

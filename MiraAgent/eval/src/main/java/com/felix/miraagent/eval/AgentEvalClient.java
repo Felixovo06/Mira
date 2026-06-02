@@ -38,7 +38,16 @@ public class AgentEvalClient {
         String sessionId = "eval-" + UUID.randomUUID();
         String userId = "eval-" + (c.id() != null ? c.id() : "x");
 
-        // 多轮场景:先把前置消息按序发出(同 session),建立上下文,再评最后一条
+        // 跨会话长期记忆:前置消息发到"另一个独立 session"(同 userId),与提问 session 隔离。
+        // 此时提问 session 上下文里没有这些事实,只能靠长期记忆的持久化与召回 → 专测长期记忆。
+        if (!c.memorySetupMessages().isEmpty()) {
+            String memorySession = "eval-mem-" + UUID.randomUUID();
+            for (String prior : c.memorySetupMessages()) {
+                sendSetup(memorySession, userId, prior, c.enabledTools());
+            }
+        }
+
+        // 对话内上下文:前置消息按序发到同一 session,建立上下文,再评最后一条
         for (String prior : c.setupMessages()) {
             sendSetup(sessionId, userId, prior, c.enabledTools());
         }

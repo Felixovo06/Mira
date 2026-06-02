@@ -16,7 +16,9 @@ import java.util.Map;
  * @param expectNoTool  是否期望"不调用任何工具"（no-tool 准确率）
  * @param assertContains 最终回复应包含的关键字（轻量事实断言；可空）
  * @param expectReview  是否期望触发"自我改善"后台复盘（null=不评该维度）
- * @param setup         同会话前置用户消息（先按序发出再发 userMessage，用于多轮记忆测试；可空）
+ * @param setup         同会话前置用户消息（先按序发出再发 userMessage，用于"对话内上下文"记忆；可空）
+ * @param memorySetup   跨会话前置用户消息：在"另一个独立 session"(同 userId)中先按序发出，再到新 session 发 userMessage。
+ *                      此时唯一信息来源是长期记忆的持久化与召回，专测跨会话长期记忆（清空记忆库则必失败）；可空
  */
 public record EvalCase(
         String id,
@@ -29,7 +31,8 @@ public record EvalCase(
         Boolean expectNoTool,
         List<String> assertContains,
         Boolean expectReview,
-        List<String> setup) {
+        List<String> setup,
+        List<String> memorySetup) {
 
     public boolean expectsNoTool() {
         return Boolean.TRUE.equals(expectNoTool);
@@ -37,5 +40,9 @@ public record EvalCase(
 
     public List<String> setupMessages() {
         return setup == null ? List.of() : setup;
+    }
+
+    public List<String> memorySetupMessages() {
+        return memorySetup == null ? List.of() : memorySetup;
     }
 }
