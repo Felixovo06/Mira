@@ -50,6 +50,13 @@ mira:
   #       type: http
   #       url: https://mcp.exa.ai/mcp
   #       tool-risk-level: low
+  #     # 天气查询（自带零依赖示例 server，数据源 Open-Meteo，免费免 key）：
+  #     # 桥接出 mcp__weather__get_weather(city) 工具，按城市名返回当前天气。
+  #     - id: weather
+  #       type: stdio
+  #       command: python3
+  #       args: [ "scripts/mcp/weather_mcp_server.py" ]
+  #       tool-risk-level: low
 
   # 内置工具：calculator(LOW)/web_fetch(MEDIUM)/file_read(MEDIUM)/file_write(HIGH) + note/todo
   # + 文档处理 document_list(LOW)/document_read(MEDIUM,Tika 全格式解析)/document_write(MEDIUM,POI 生成 docx/xlsx)。
