@@ -29,6 +29,15 @@ public class JdbcHybridMemoryRetriever implements MemoryRetriever {
 
     private static final Logger log = LoggerFactory.getLogger(JdbcHybridMemoryRetriever.class);
 
+    private static final int RRF_K = 60;
+    // 向量是可靠的语义信号;pg_trgm 词法对短中文查询多为噪声,故向量在融合中加权更高。
+    private static final double VECTOR_WEIGHT = 3.0;
+    private static final double LEXICAL_WEIGHT = 1.0;
+    // 次级加成:在「相关性」主信号之上做轻微调整,可盖过小幅相关性差距,但不会压过强相关性。
+    private static final double CHAR_BOOST = 0.15;
+    private static final double CATEGORY_BOOST = 0.05;
+    private static final double RECENCY_BOOST = 0.02;
+
     private final JdbcMemoryRetriever lexicalRetriever;
     private final EmbeddingClient embeddingClient;
     private final JdbcTemplate jdbc;
@@ -66,7 +75,12 @@ public class JdbcHybridMemoryRetriever implements MemoryRetriever {
                 ? CompletableFuture.supplyAsync(() -> vectorHits(request, limit))
                 : CompletableFuture.completedFuture(Collections.emptyList());
 
-        List<MemoryIndex> merged = rerank(rrf(lexicalFuture.join(), vectorFuture.join(), limit * 2), request, limit);
+        Map<String, Double> fused = new LinkedHashMap<>();
+        Map<String, MemoryIndex> byId = new LinkedHashMap<>();
+        accumulateRrf(fused, byId, lexicalFuture.join(), LEXICAL_WEIGHT);
+        accumulateRrf(fused, byId, vectorFuture.join(), VECTOR_WEIGHT);
+
+        List<MemoryIndex> merged = rerank(byId, fused, request, limit);
 
         return MemoryRetrieveResult.builder()
                 .hits(merged)
@@ -108,51 +122,42 @@ public class JdbcHybridMemoryRetriever implements MemoryRetriever {
         }
     }
 
-    private List<MemoryIndex> rrf(List<MemoryIndex> lexicalHits, List<MemoryIndex> vectorHits, int limit) {
-        Map<String, Double> scores = new LinkedHashMap<>();
-        Map<String, MemoryIndex> byId = new LinkedHashMap<>();
-
-        for (int i = 0; i < lexicalHits.size(); i++) {
-            String id = lexicalHits.get(i).getId();
-            scores.merge(id, 1.0 / (60 + i + 1), Double::sum);
-            byId.put(id, lexicalHits.get(i));
+    /** 加权 RRF 累加:把一路检索结果按排名贡献分数到 fused,权重区分词法/向量。 */
+    private void accumulateRrf(Map<String, Double> fused, Map<String, MemoryIndex> byId,
+                               List<MemoryIndex> hits, double weight) {
+        for (int i = 0; i < hits.size(); i++) {
+            MemoryIndex m = hits.get(i);
+            fused.merge(m.getId(), weight / (RRF_K + i + 1), Double::sum);
+            byId.putIfAbsent(m.getId(), m);
         }
-
-        for (int i = 0; i < vectorHits.size(); i++) {
-            String id = vectorHits.get(i).getId();
-            scores.merge(id, 1.0 / (60 + i + 1), Double::sum);
-            byId.putIfAbsent(id, vectorHits.get(i));
-        }
-
-        return scores.entrySet().stream()
-                .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
-                .limit(limit)
-                .map(e -> byId.get(e.getKey()))
-                .toList();
     }
 
-    private List<MemoryIndex> rerank(List<MemoryIndex> merged, MemoryRetrieveRequest request, int limit) {
-        Map<String, Integer> originalRank = new LinkedHashMap<>();
-        for (int i = 0; i < merged.size(); i++) {
-            originalRank.put(merged.get(i).getId(), i);
-        }
-        return merged.stream()
-                .sorted(Comparator
-                        .comparingDouble((MemoryIndex index) -> rerankScore(index, request)).reversed()
-                        .thenComparingInt(index -> originalRank.getOrDefault(index.getId(), Integer.MAX_VALUE)))
+    /**
+     * 重排:以归一化的融合相关性为主信号,角色/类目/recency 作为次级加成。
+     * 这样强相关性(向量)主导排序,而当前角色/重要类目只能盖过小幅相关性差距,
+     * 不会像旧实现那样用查询无关的类目/recency 完全压过相关性。
+     */
+    private List<MemoryIndex> rerank(Map<String, MemoryIndex> byId, Map<String, Double> fused,
+                                     MemoryRetrieveRequest request, int limit) {
+        double maxRel = fused.values().stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
+        double norm = maxRel > 0 ? maxRel : 1.0;
+        return byId.values().stream()
+                .sorted(Comparator.comparingDouble((MemoryIndex index) ->
+                        finalScore(index, fused.getOrDefault(index.getId(), 0.0) / norm, request)).reversed())
                 .limit(limit)
                 .toList();
     }
 
-    private double rerankScore(MemoryIndex index, MemoryRetrieveRequest request) {
-        double score = 0.0;
+    private double finalScore(MemoryIndex index, double relevanceNorm, MemoryRetrieveRequest request) {
+        double score = relevanceNorm; // 主信号:归一化融合相关性 [0,1]
         if (request.getCharacterId() != null && request.getCharacterId().equals(index.getCharacterId())) {
-            score += 3.0;
+            score += CHAR_BOOST;
         }
-        score += categoryWeight(index.getCategory());
+        score += CATEGORY_BOOST * categoryWeight(index.getCategory());
         Instant recency = index.getUpdatedAt() != null ? index.getUpdatedAt() : index.getCreatedAt();
         if (recency != null) {
-            score += recency.toEpochMilli() / 1_000_000_000_000.0;
+            // 归一到极小区间,仅作近似平局时的轻微新近性倾向
+            score += RECENCY_BOOST * (recency.toEpochMilli() / 1_000_000_000_000_000.0);
         }
         return score;
     }
