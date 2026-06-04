@@ -10,5 +10,5 @@ public class MemoryRetrieveRequest {
     String characterId;
     String query;
     @Builder.Default
-    int limit = 10;
+    int limit = 5;
 }

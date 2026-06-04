@@ -41,7 +41,7 @@ public class JdbcMemoryRetriever implements MemoryRetriever {
 
         String q = request.getQuery();
         String userId = request.getUserId();
-        int limit = request.getLimit() > 0 ? request.getLimit() : 10;
+        int limit = request.getLimit() > 0 ? request.getLimit() : 5;
 
         String sql;
         Object[] params;
