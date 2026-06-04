@@ -10,6 +10,7 @@ import com.felix.miraagent.memory.MemoryRetrieveRequest;
 import com.felix.miraagent.memory.MemoryRetrieveResult;
 import com.felix.miraagent.memory.MemoryRetriever;
 import com.felix.miraagent.memory.MemoryScope;
+import com.felix.miraagent.memory.RerankClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -42,15 +43,30 @@ public class JdbcHybridMemoryRetriever implements MemoryRetriever {
     private final EmbeddingClient embeddingClient;
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
+    /** 可选的重排模型（百炼 rerank）；为 null 时退回归一化 RRF 融合排序。 */
+    private final RerankClient rerankClient;
+    /** 送进 rerank 的候选上限（取融合分 top-N），控制成本与延迟。 */
+    private final int rerankTopN;
 
     public JdbcHybridMemoryRetriever(JdbcMemoryRetriever lexicalRetriever,
                                      EmbeddingClient embeddingClient,
                                      JdbcTemplate jdbc,
                                      ObjectMapper objectMapper) {
+        this(lexicalRetriever, embeddingClient, jdbc, objectMapper, null, 20);
+    }
+
+    public JdbcHybridMemoryRetriever(JdbcMemoryRetriever lexicalRetriever,
+                                     EmbeddingClient embeddingClient,
+                                     JdbcTemplate jdbc,
+                                     ObjectMapper objectMapper,
+                                     RerankClient rerankClient,
+                                     int rerankTopN) {
         this.lexicalRetriever = lexicalRetriever;
         this.embeddingClient = embeddingClient;
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
+        this.rerankClient = rerankClient;
+        this.rerankTopN = rerankTopN > 0 ? rerankTopN : 20;
     }
 
     @Override
@@ -62,7 +78,7 @@ public class JdbcHybridMemoryRetriever implements MemoryRetriever {
                     .build();
         }
 
-        int limit = request.getLimit() > 0 ? request.getLimit() : 10;
+        int limit = request.getLimit() > 0 ? request.getLimit() : 5;
 
         CompletableFuture<List<MemoryIndex>> lexicalFuture = CompletableFuture
                 .supplyAsync(() -> lexicalRetriever.retrieve(request).getHits())
@@ -80,7 +96,7 @@ public class JdbcHybridMemoryRetriever implements MemoryRetriever {
         accumulateRrf(fused, byId, lexicalFuture.join(), LEXICAL_WEIGHT);
         accumulateRrf(fused, byId, vectorFuture.join(), VECTOR_WEIGHT);
 
-        List<MemoryIndex> merged = rerank(byId, fused, request, limit);
+        List<MemoryIndex> merged = rerankAndCut(byId, fused, request, limit);
 
         return MemoryRetrieveResult.builder()
                 .hits(merged)
@@ -133,19 +149,57 @@ public class JdbcHybridMemoryRetriever implements MemoryRetriever {
     }
 
     /**
-     * 重排:以归一化的融合相关性为主信号,角色/类目/recency 作为次级加成。
-     * 这样强相关性(向量)主导排序,而当前角色/重要类目只能盖过小幅相关性差距,
-     * 不会像旧实现那样用查询无关的类目/recency 完全压过相关性。
+     * 重排 + 截断:以「主信号相关性」为基准,角色/类目作为次级加成。
+     * 主信号:有 rerank 模型则用模型打分(语义重排),否则用归一化的 RRF 融合分。
+     * 角色/类目加成量级小(0.05/0.15),只能盖过小幅相关性差距,不会压过强相关性。
      */
-    private List<MemoryIndex> rerank(Map<String, MemoryIndex> byId, Map<String, Double> fused,
-                                     MemoryRetrieveRequest request, int limit) {
-        double maxRel = fused.values().stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
-        double norm = maxRel > 0 ? maxRel : 1.0;
+    private List<MemoryIndex> rerankAndCut(Map<String, MemoryIndex> byId, Map<String, Double> fused,
+                                           MemoryRetrieveRequest request, int limit) {
+        Map<String, Double> relevance = buildRelevance(byId, fused, request);
         return byId.values().stream()
                 .sorted(Comparator.comparingDouble((MemoryIndex index) ->
-                        finalScore(index, fused.getOrDefault(index.getId(), 0.0) / norm, request)).reversed())
+                        finalScore(index, relevance.getOrDefault(index.getId(), 0.0), request)).reversed())
                 .limit(limit)
                 .toList();
+    }
+
+    /**
+     * 计算每条候选的主信号相关性 [0,1]。
+     * 有 rerank 模型且候选>1:取融合分 top-N 候选送模型打分,模型分即相关性(未被打分的候选记 0);
+     * 模型调用失败则优雅退回归一化 RRF 融合分,绝不阻断检索。
+     */
+    private Map<String, Double> buildRelevance(Map<String, MemoryIndex> byId, Map<String, Double> fused,
+                                               MemoryRetrieveRequest request) {
+        if (rerankClient != null && byId.size() > 1) {
+            try {
+                List<MemoryIndex> candidates = byId.values().stream()
+                        .sorted(Comparator.comparingDouble(
+                                (MemoryIndex m) -> fused.getOrDefault(m.getId(), 0.0)).reversed())
+                        .limit(rerankTopN)
+                        .toList();
+                List<String> docs = candidates.stream()
+                        .map(m -> m.getContentPreview() == null ? "" : m.getContentPreview())
+                        .toList();
+                double[] scores = rerankClient.rerank(request.getQuery(), docs);
+                Map<String, Double> rel = new LinkedHashMap<>();
+                for (int i = 0; i < candidates.size() && i < scores.length; i++) {
+                    rel.put(candidates.get(i).getId(), scores[i]);
+                }
+                return rel;
+            } catch (Exception e) {
+                log.warn("Rerank model failed, falling back to RRF fusion ranking: {}", e.getMessage());
+            }
+        }
+        return normalizeFused(fused);
+    }
+
+    /** 归一化融合分到 [0,1]（主信号回退路径）。 */
+    private Map<String, Double> normalizeFused(Map<String, Double> fused) {
+        double maxRel = fused.values().stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
+        double norm = maxRel > 0 ? maxRel : 1.0;
+        Map<String, Double> rel = new LinkedHashMap<>();
+        fused.forEach((id, v) -> rel.put(id, v / norm));
+        return rel;
     }
 
     private double finalScore(MemoryIndex index, double relevanceNorm, MemoryRetrieveRequest request) {

@@ -1,0 +1,78 @@
+[
+  { "id": "p_job",        "day": 25, "category": "PROFILE",      "content": "我现在在一家电商公司做后端开发" },
+  { "id": "w_tech",       "day": 21, "category": "PROFILE",      "content": "工作里主要写 Java，平时跟数据库打交道最多" },
+  { "id": "w_promo",      "day": 12, "category": "EVENT",        "content": "上个月刚被提成了小组长，开始带俩人" },
+  { "id": "w_side",       "day": 9,  "category": "GOAL",         "content": "业余想自己捣鼓个独立小项目练手" },
+  { "id": "e_work_ot",    "day": 4,  "category": "EVENT",        "content": "项目赶着上线，这周连着加了好几天班" },
+  { "id": "e_interview",  "day": 7,  "category": "EVENT",        "content": "有个朋友想内推我去他们公司，我还在犹豫" },
+
+  { "id": "p_city",       "day": 30, "category": "PROFILE",      "content": "去年从老家成都搬到了杭州生活" },
+  { "id": "c_district",   "day": 23, "category": "PROFILE",      "content": "在杭州租的房子在余杭那边" },
+  { "id": "c_visit",      "day": 35, "category": "EVENT",        "content": "春节回成都老家待了大半个月" },
+  { "id": "hn_oldcity",   "day": 16, "category": "EVENT",        "content": "实习那会儿在上海待过大半年" },
+
+  { "id": "p_allergy",    "day": 22, "category": "PROFILE",      "content": "我吃海鲜会过敏，尤其是虾" },
+  { "id": "e_seafood",    "day": 2,  "category": "EVENT",        "content": "昨天聚餐没注意吃到虾，脸都肿了" },
+
+  { "id": "p_pet",        "day": 28, "category": "PROFILE",      "content": "家里养了只布偶猫，叫汤圆" },
+  { "id": "pet_second",   "day": 7,  "category": "EVENT",        "content": "前段时间又领养了只小奶猫，还没起名" },
+  { "id": "pet_food",     "day": 13, "category": "PROFILE",      "content": "汤圆挑食，只肯吃某个牌子的猫粮" },
+  { "id": "pet_old",      "day": 50, "category": "EVENT",        "content": "小时候家里养过一只土猫，很皮" },
+  { "id": "e_cat_sick",   "day": 3,  "category": "EVENT",        "content": "汤圆这两天没什么胃口，带去医院看了看" },
+  { "id": "hn_friendcat", "day": 11, "category": "EVENT",        "content": "朋友家也养了只猫，特别亲人" },
+
+  { "id": "p_gf",         "day": 26, "category": "RELATIONSHIP", "content": "和女朋友在一起三年了，她叫小雨" },
+  { "id": "r_meet",       "day": 27, "category": "RELATIONSHIP", "content": "我跟小雨是大学同学，那会儿认识的" },
+  { "id": "p_anniversary","day": 24, "category": "PROFILE",      "content": "我和小雨的纪念日是 5 月 20 号" },
+  { "id": "e_trip",       "day": 9,  "category": "EVENT",        "content": "国庆跟小雨一起去了趟云南" },
+  { "id": "p_sibling",    "day": 20, "category": "RELATIONSHIP", "content": "我有个妹妹，今年读高二" },
+
+  { "id": "pref_music",   "day": 18, "category": "PREFERENCE",   "content": "晚上写代码的时候喜欢放点爵士" },
+  { "id": "m_folk",       "day": 4,  "category": "PREFERENCE",   "content": "最近迷上了民谣，单曲循环好几首" },
+  { "id": "m_rock_old",   "day": 45, "category": "PREFERENCE",   "content": "大学那会儿是个摇滚迷，没少跑现场" },
+  { "id": "e_jazz_bar",   "day": 6,  "category": "EVENT",        "content": "上周末去了家爵士酒吧，氛围特别好" },
+  { "id": "m_concert",    "day": 3,  "category": "EVENT",        "content": "抢到了下个月一个 livehouse 的票" },
+  { "id": "hn_podcast",   "day": 13, "category": "PREFERENCE",   "content": "通勤路上我一般听播客打发时间" },
+
+  { "id": "pref_food",    "day": 17, "category": "PREFERENCE",   "content": "我口味偏辣，水煮鱼是我的最爱" },
+  { "id": "f_sweet",      "day": 16, "category": "PREFERENCE",   "content": "其实也很爱吃甜的，蛋糕甜品来者不拒" },
+  { "id": "f_hotpot",     "day": 6,  "category": "EVENT",        "content": "最近迷上了吃火锅，一周能去两次" },
+  { "id": "hn_salad",     "day": 7,  "category": "EVENT",        "content": "为了减肥中午常吃沙拉" },
+
+  { "id": "pref_coffee",  "day": 15, "category": "PREFERENCE",   "content": "每天不喝杯咖啡就提不起精神" },
+  { "id": "hn_tea",       "day": 9,  "category": "EVENT",        "content": "下午有时候会泡壶茶" },
+
+  { "id": "goal_fit",     "day": 10, "category": "GOAL",         "content": "最近在健身，目标三个月瘦十斤" },
+  { "id": "fit_gym",      "day": 9,  "category": "EVENT",        "content": "办了张健身房的年卡" },
+  { "id": "fit_run",      "day": 6,  "category": "EVENT",        "content": "开始每周雷打不动跑三次步" },
+  { "id": "e_cake",       "day": 1,  "category": "EVENT",        "content": "今天没忍住吃了块蛋糕，减肥计划又泡汤" },
+
+  { "id": "goal_lang",    "day": 19, "category": "GOAL",         "content": "在备考日语，想年底拿下 N2" },
+  { "id": "l_english",    "day": 20, "category": "GOAL",         "content": "工作需要，也在慢慢把英语捡起来" },
+  { "id": "e_guitar",     "day": 8,  "category": "EVENT",        "content": "报了个吉他班，最近开始学弹唱" },
+
+  { "id": "pref_weekend", "day": 14, "category": "PREFERENCE",   "content": "周末要么去爬山要么宅家打游戏" },
+  { "id": "e_hike",       "day": 5,  "category": "EVENT",        "content": "周六爬了北高峰，腿到现在还酸" },
+  { "id": "pref_read",    "day": 12, "category": "PREFERENCE",   "content": "睡前习惯翻几页推理小说" },
+
+  { "id": "goal_car",     "day": 11, "category": "GOAL",         "content": "在攒钱，打算明年提辆车" },
+
+  { "id": "n_phone",      "day": 2,  "category": "EVENT",        "content": "手机屏幕摔裂了，得抽空去修" },
+  { "id": "n_bakery",     "day": 3,  "category": "EVENT",        "content": "楼下新开的面包店每次都排长队" },
+  { "id": "n_cold",       "day": 1,  "category": "EVENT",        "content": "最近降温，把厚外套翻出来了" },
+  { "id": "n_movie",      "day": 4,  "category": "EVENT",        "content": "同事安利了部电影，还没空看" },
+  { "id": "n_metro",      "day": 5,  "category": "EVENT",        "content": "早高峰的地铁挤得人喘不过气" },
+  { "id": "n_charger",    "day": 6,  "category": "EVENT",        "content": "充电器又不知道塞哪去了" },
+  { "id": "n_doc",        "day": 2,  "category": "EVENT",        "content": "周三要去交一份材料" },
+  { "id": "n_haircut",    "day": 8,  "category": "EVENT",        "content": "周末去剪了个头发" },
+  { "id": "n_book2",      "day": 10, "category": "EVENT",        "content": "在书店站着看完了半本书" },
+  { "id": "n_rain",       "day": 7,  "category": "EVENT",        "content": "下了一整天雨，哪也没去" },
+  { "id": "n_plant",      "day": 12, "category": "EVENT",        "content": "阳台上的多肉好像要养不活了" },
+  { "id": "n_game",       "day": 9,  "category": "EVENT",        "content": "玩的那个游戏又更新了一堆东西" },
+  { "id": "n_lego",       "day": 14, "category": "EVENT",        "content": "拼了好久的乐高终于完工了" },
+  { "id": "n_keyboard",   "day": 11, "category": "EVENT",        "content": "新换的键盘手感不错" },
+  { "id": "n_piano",      "day": 6,  "category": "EVENT",        "content": "隔壁邻居最近老半夜弹钢琴" },
+  { "id": "n_parents",    "day": 5,  "category": "EVENT",        "content": "爸妈下个月要来杭州看我" },
+  { "id": "n_dentist",    "day": 3,  "category": "EVENT",        "content": "智齿有点疼，可能得去看牙医" },
+  { "id": "n_vip",        "day": 4,  "category": "EVENT",        "content": "顺手把视频会员续了一年" }
+]

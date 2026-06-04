@@ -55,7 +55,7 @@ public class RecallMemoryToolHandler implements ToolHandler {
                     .userId(userId)
                     .query(query)
                     .characterId(characterId)
-                    .limit(10)
+                    .limit(5)
                     .build();
 
             MemoryRetrieveResult result = retriever.retrieve(request);

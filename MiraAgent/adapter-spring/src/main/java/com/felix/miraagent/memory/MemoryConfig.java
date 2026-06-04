@@ -17,7 +17,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.util.Optional;
 
 @Configuration
-@EnableConfigurationProperties({MemoryProperties.class, EmbeddingProperties.class})
+@EnableConfigurationProperties({MemoryProperties.class, EmbeddingProperties.class, RerankProperties.class})
 public class MemoryConfig {
 
     @Bean
@@ -73,8 +73,17 @@ public class MemoryConfig {
     public MemoryRetriever hybridMemoryRetriever(JdbcMemoryRetriever lexical,
                                                  JdbcTemplate jdbc,
                                                  ObjectMapper objectMapper,
-                                                 Optional<EmbeddingClient> embeddingClient) {
-        return new JdbcHybridMemoryRetriever(lexical, embeddingClient.orElse(null), jdbc, objectMapper);
+                                                 Optional<EmbeddingClient> embeddingClient,
+                                                 Optional<RerankClient> rerankClient,
+                                                 RerankProperties rerankProperties) {
+        return new JdbcHybridMemoryRetriever(lexical, embeddingClient.orElse(null), jdbc, objectMapper,
+                rerankClient.orElse(null), rerankProperties.getTopN());
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "mira.rerank", name = "base-url")
+    public RerankClient rerankClient(RerankProperties props) {
+        return new DashScopeRerankClient(props);
     }
 
     @Bean
