@@ -115,8 +115,9 @@
 
 .wb-list {
   flex: 1; min-height: 0; overflow-y: auto;
-  padding: 18px 28px 28px; display: flex; flex-direction: column; gap: 12px;
+  padding: 18px 28px 28px;
 }
+.wb-list > * + * { margin-top: 12px; }
 .wb-stat { color: var(--text-faint); font-size: 12px; font-family: var(--font-mono); padding: 0 2px 2px; }
 .wb-empty {
   padding: 40px 16px; text-align: center; color: var(--text-faint); font-size: 13px;
