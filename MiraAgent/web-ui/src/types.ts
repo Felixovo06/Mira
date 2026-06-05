@@ -152,12 +152,18 @@ export interface CharacterCard {
   tags?: string[]
 }
 
+// 一条世界书条目（插拔式，可单独开关）
 export interface StyleConstraint {
+  id?: string
+  name?: string
+  order?: number
   enabled: boolean
   worldSetting?: string
   tone?: string
   styleRules?: string[]
 }
+
+export type WorldBookEntry = StyleConstraint
 
 export interface WeixinLoginState {
   loggedIn: boolean
