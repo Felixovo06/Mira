@@ -70,4 +70,28 @@ class StyleConstraintComposerTest {
         String out = composer.compose(sc);
         assertFalse(out.contains("- "), "空白规则不应渲染为列表项");
     }
+
+    @Test
+    void composeAllConcatenatesEnabledNamedEntries() {
+        var a = StyleConstraint.builder().name("世界A").worldSetting("WORLD_A").order(1).build();
+        var b = StyleConstraint.builder().name("语气B").tone("TONE_B").order(2).build();
+        var off = StyleConstraint.builder().name("关掉C").enabled(false).worldSetting("WORLD_C").build();
+
+        String out = composer.composeAll(java.util.List.of(a, b, off));
+
+        assertTrue(out.contains("# 世界A"), "命名条目应带 # 名称小标题");
+        assertTrue(out.contains("WORLD_A"));
+        assertTrue(out.contains("# 语气B"));
+        assertTrue(out.contains("TONE_B"));
+        assertFalse(out.contains("WORLD_C"), "禁用条目不应渲染");
+        assertTrue(out.indexOf("世界A") < out.indexOf("语气B"), "应按传入顺序拼接");
+        // 命名条目内部标题下沉为 ## 级
+        assertTrue(out.contains("## 世界设定"));
+    }
+
+    @Test
+    void composeAllEmptyOrNullReturnsEmpty() {
+        assertEquals("", composer.composeAll(null));
+        assertEquals("", composer.composeAll(java.util.List.of()));
+    }
 }

@@ -105,7 +105,7 @@ class PromptBuilderTest {
                 .worldSetting("STYLE_WORLD_MARK")
                 .tone("统一语气")
                 .build();
-        var styledBuilder = new DefaultPromptBuilder(() -> Optional.of(style));
+        var styledBuilder = new DefaultPromptBuilder(() -> java.util.List.of(style));
 
         var request = PromptBuildRequest.builder()
                 .characterProfile(CharacterProfile.builder().id("mira").name("MIRA_MARK").build())

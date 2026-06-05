@@ -1,12 +1,14 @@
 package com.felix.miraagent.style;
 
-import java.util.Optional;
+import java.util.List;
 
 /**
- * 全局风格约束的来源。单一全局配置，故只需 {@link #get()}。
- * 返回 empty 表示未配置或被禁用，PromptBuilder 应跳过注入。
+ * 世界书的读侧来源：返回当前生效的条目集合。
+ * 插拔式语义——只有 {@code enabled} 的条目生效，按 {@code order} 升序排列。
+ * 返回空列表表示无注入（子系统关闭或没有启用条目），PromptBuilder 应跳过注入。
  */
 public interface StyleConstraintProvider {
 
-    Optional<StyleConstraint> get();
+    /** 当前生效（启用且按 order 升序）的世界书条目；空列表表示不注入。 */
+    List<StyleConstraint> activeEntries();
 }

@@ -61,9 +61,9 @@ public class DefaultPromptBuilder implements PromptBuilder {
     private String buildStableSystemPrompt(PromptBuildRequest request) {
         var parts = new ArrayList<String>();
 
-        // 全局风格约束(世界设定+回复风格)：最稳定、凌驾于单个角色之上，置于最前以利 prefix caching
+        // 世界书(多条目世界设定+回复风格)：最稳定、凌驾于单个角色之上，置于最前以利 prefix caching
         if (styleConstraintProvider != null) {
-            String styleSection = styleComposer.compose(styleConstraintProvider.get().orElse(null));
+            String styleSection = styleComposer.composeAll(styleConstraintProvider.activeEntries());
             if (hasText(styleSection)) {
                 parts.add(styleSection);
             }
