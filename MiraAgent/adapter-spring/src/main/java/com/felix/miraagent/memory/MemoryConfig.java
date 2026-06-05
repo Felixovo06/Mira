@@ -43,12 +43,14 @@ public class MemoryConfig {
         double exact = dedup.isEnabled() ? dedup.getExactThreshold() : 0;
         double semNear = dedup.isEnabled() ? dedup.getSemanticNearThreshold() : 0;
         double semExact = dedup.isEnabled() ? dedup.getSemanticExactThreshold() : 0;
+        MemoryProperties.Writer writer = memoryProperties.getWriter();
         return new BlockingQueueMemoryWriter(memoryStore,
                 memoryIndexRepository.orElse(null),
                 asyncEmbeddingIndexer.orElse(null),
                 memoryWritePolicy.orElse(null),
                 embeddingClient.orElse(null),
-                near, exact, semNear, semExact);
+                near, exact, semNear, semExact,
+                writer.getQueueCapacity(), writer.getOfferTimeoutMs(), writer.getShutdownTimeoutMs());
     }
 
     @Bean

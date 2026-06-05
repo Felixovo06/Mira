@@ -9,12 +9,19 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 
 public class BlockingQueueMemoryWriter implements SerializedMemoryWriter {
 
     private static final Logger log = LoggerFactory.getLogger(BlockingQueueMemoryWriter.class);
-    private static final Runnable POISON_PILL = () -> {};
+    /** worker 空闲时的轮询间隔：用于在不依赖毒丸的前提下感知停机。 */
+    private static final long POLL_INTERVAL_MS = 200;
+    /** 默认队列容量;<=0 视为无界(仅测试/退化场景)。 */
+    private static final int DEFAULT_QUEUE_CAPACITY = 10_000;
+    private static final long DEFAULT_OFFER_TIMEOUT_MS = 5_000;
+    private static final long DEFAULT_SHUTDOWN_TIMEOUT_MS = 10_000;
 
     /** 默认阈值：>= 视为同一事实重复（仅强化、不新增卡片）。pg_trgm similarity，0-1。 */
     private static final double DEFAULT_EXACT_DUP_THRESHOLD = 0.82;
@@ -41,7 +48,16 @@ public class BlockingQueueMemoryWriter implements SerializedMemoryWriter {
     private final double semanticNearThreshold;
     /** 向量 cosine >= 此值按完全重复处理（仅强化、不改措辞）。 */
     private final double semanticExactThreshold;
-    private final LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<>();
+    /** 有界写入队列：背压泄流,防突发写入无界增长 OOM。 */
+    private final LinkedBlockingQueue<Runnable> queue;
+    /** 同步 submit 入队的最长等待;超时按失败返回。 */
+    private final long offerTimeoutMs;
+    /** shutdown 排空的最长等待;超时则中断 worker。 */
+    private final long shutdownTimeoutMs;
+    /** 因队满/停机被拒的写入计数,供观测与测试断言。 */
+    private final AtomicLong droppedCount = new AtomicLong();
+    /** 置位后拒绝新提交;worker 排空后退出。 */
+    private volatile boolean shuttingDown = false;
     private final Thread workerThread;
 
     public BlockingQueueMemoryWriter(MemoryStore memoryStore) {
@@ -82,6 +98,23 @@ public class BlockingQueueMemoryWriter implements SerializedMemoryWriter {
                                      double exactDupThreshold,
                                      double semanticNearThreshold,
                                      double semanticExactThreshold) {
+        this(memoryStore, indexRepository, embeddingIndexer, memoryWritePolicy, embeddingClient,
+                nearDupThreshold, exactDupThreshold, semanticNearThreshold, semanticExactThreshold,
+                DEFAULT_QUEUE_CAPACITY, DEFAULT_OFFER_TIMEOUT_MS, DEFAULT_SHUTDOWN_TIMEOUT_MS);
+    }
+
+    public BlockingQueueMemoryWriter(MemoryStore memoryStore,
+                                     MemoryIndexRepository indexRepository,
+                                     AsyncEmbeddingIndexer embeddingIndexer,
+                                     MemoryWritePolicy memoryWritePolicy,
+                                     EmbeddingClient embeddingClient,
+                                     double nearDupThreshold,
+                                     double exactDupThreshold,
+                                     double semanticNearThreshold,
+                                     double semanticExactThreshold,
+                                     int queueCapacity,
+                                     long offerTimeoutMs,
+                                     long shutdownTimeoutMs) {
         this.memoryStore = memoryStore;
         this.indexRepository = indexRepository;
         this.embeddingIndexer = embeddingIndexer;
@@ -91,19 +124,35 @@ public class BlockingQueueMemoryWriter implements SerializedMemoryWriter {
         this.exactDupThreshold = exactDupThreshold;
         this.semanticNearThreshold = semanticNearThreshold;
         this.semanticExactThreshold = semanticExactThreshold;
+        this.queue = queueCapacity > 0 ? new LinkedBlockingQueue<>(queueCapacity) : new LinkedBlockingQueue<>();
+        this.offerTimeoutMs = offerTimeoutMs;
+        this.shutdownTimeoutMs = shutdownTimeoutMs;
         this.workerThread = Thread.ofVirtual().name("memory-writer").start(this::processQueue);
+    }
+
+    /** 被拒计数(队满或停机中)。供观测/测试。 */
+    public long droppedCount() {
+        return droppedCount.get();
     }
 
     @Override
     public MemoryWriteResult submit(MemoryWriteRequest request) {
-        // 同步语义：入队后等结果。供工具调用（需把结果回给模型）使用。
-        return submitAsync(request).join();
+        // 同步语义：入队后等结果。供工具调用（需把结果回给模型）使用。返回即落定。
+        return enqueueWrite(request, true).join();
     }
 
     @Override
     public CompletableFuture<MemoryWriteResult> submitAsync(MemoryWriteRequest request) {
+        return enqueueWrite(request, false);
+    }
+
+    /**
+     * 构造写入任务并按背压策略入队。blocking=true(工具路径)队满时阻塞至 offerTimeoutMs；
+     * blocking=false(后台路径)队满即拒绝,泄流不卡主回复。被拒/停机时 future 以 success=false 完成。
+     */
+    private CompletableFuture<MemoryWriteResult> enqueueWrite(MemoryWriteRequest request, boolean blocking) {
         CompletableFuture<MemoryWriteResult> future = new CompletableFuture<>();
-        queue.add(() -> {
+        Runnable task = () -> {
             try {
                 if (memoryWritePolicy != null && !memoryWritePolicy.isAllowed(request.getUserId(), request.getCategory())) {
                     future.complete(MemoryWriteResult.builder()
@@ -132,14 +181,17 @@ public class BlockingQueueMemoryWriter implements SerializedMemoryWriter {
             } catch (Exception e) {
                 future.completeExceptionally(e);
             }
-        });
+        };
+        if (!tryEnqueue(task, blocking)) {
+            future.complete(rejected(request.getMemoryId()));
+        }
         return future;
     }
 
     @Override
     public MemoryWriteResult archive(String userId, String memoryId) {
         CompletableFuture<MemoryWriteResult> future = new CompletableFuture<>();
-        queue.add(() -> {
+        Runnable task = () -> {
             try {
                 MemoryWriteResult result = memoryStore.archive(userId, memoryId);
                 if (indexRepository != null && result.isSuccess()) {
@@ -153,15 +205,55 @@ public class BlockingQueueMemoryWriter implements SerializedMemoryWriter {
             } catch (Exception e) {
                 future.completeExceptionally(e);
             }
-        });
+        };
+        // 归档是控制操作（用户发起、需落定）：按阻塞入队,与 submit 同。
+        if (!tryEnqueue(task, true)) {
+            future.complete(rejected(memoryId));
+        }
         return future.join();
+    }
+
+    /** 入队:停机中直接拒绝;blocking 路径队满阻塞至 offerTimeoutMs,非 blocking 队满即拒。 */
+    private boolean tryEnqueue(Runnable task, boolean blocking) {
+        if (shuttingDown) {
+            droppedCount.incrementAndGet();
+            log.warn("Memory writer is shutting down, rejecting write (dropped total={})", droppedCount.get());
+            return false;
+        }
+        try {
+            boolean accepted = blocking
+                    ? queue.offer(task, offerTimeoutMs, TimeUnit.MILLISECONDS)
+                    : queue.offer(task);
+            if (!accepted) {
+                droppedCount.incrementAndGet();
+                log.warn("Memory writer queue full (capacity reached), rejecting {} write (dropped total={})",
+                        blocking ? "blocking" : "async", droppedCount.get());
+            }
+            return accepted;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            droppedCount.incrementAndGet();
+            return false;
+        }
+    }
+
+    private MemoryWriteResult rejected(String memoryId) {
+        return MemoryWriteResult.builder()
+                .memoryId(memoryId)
+                .success(false)
+                .error("memory writer queue full or shutting down")
+                .build();
     }
 
     @Override
     public void shutdown() {
-        queue.add(POISON_PILL);
+        shuttingDown = true;
         try {
-            workerThread.join();
+            workerThread.join(shutdownTimeoutMs);
+            if (workerThread.isAlive()) {
+                log.warn("Memory writer did not drain within {}ms, interrupting worker", shutdownTimeoutMs);
+                workerThread.interrupt();
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -169,16 +261,23 @@ public class BlockingQueueMemoryWriter implements SerializedMemoryWriter {
 
     private void processQueue() {
         while (true) {
+            Runnable task;
             try {
-                Runnable task = queue.take();
-                if (task == POISON_PILL) {
-                    break;
-                }
-                task.run();
+                // 轮询而非 take()：空闲时也能感知停机标志,无需毒丸(毒丸在有界满队列下难以投递)。
+                task = queue.poll(POLL_INTERVAL_MS, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
             }
+            if (task != null) {
+                task.run();
+            } else if (shuttingDown) {
+                break; // 队列已空且停机中：退出
+            }
+        }
+        // 终排空：覆盖停机窗口内偶然入队的任务,保证其 future 完成、已落定不丢。
+        for (Runnable remaining; (remaining = queue.poll()) != null; ) {
+            remaining.run();
         }
     }
 

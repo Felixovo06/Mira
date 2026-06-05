@@ -10,6 +10,19 @@ public class MemoryProperties {
 
     private Dedup dedup = new Dedup();
 
+    private Writer writer = new Writer();
+
+    /** 串行写入器的背压与停机参数。 */
+    @Data
+    public static class Writer {
+        /** 写入队列容量上限：满后同步 submit 阻塞至超时、异步 submitAsync 直接拒绝(背压泄流),防无界增长 OOM。 */
+        private int queueCapacity = 10_000;
+        /** 同步 submit 入队的最长等待(毫秒);超时按失败返回,绝不无限阻塞工具路径。 */
+        private long offerTimeoutMs = 5_000;
+        /** shutdown 排空已入队任务的最长等待(毫秒);超时则中断 worker。 */
+        private long shutdownTimeoutMs = 10_000;
+    }
+
     /** 写入前去重阈值。lexical* 为 pg_trgm 字面相似度，semantic* 为向量 cosine，均 0-1。 */
     @Data
     public static class Dedup {
