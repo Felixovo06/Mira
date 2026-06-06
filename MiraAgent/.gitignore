@@ -35,3 +35,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Understand-Anything 知识图谱 ###
+.understand-anything/
